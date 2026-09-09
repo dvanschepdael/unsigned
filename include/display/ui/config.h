@@ -1,0 +1,25 @@
+/**
+ * @file config.h
+ * @brief Compile-time UI stack and element limits.
+ */
+
+#ifndef UNSIGNED_DISPLAY_UI_CONFIG_H
+#define UNSIGNED_DISPLAY_UI_CONFIG_H
+
+#ifndef UNSIGNED_UI_SCREEN_CAPACITY
+#define UNSIGNED_UI_SCREEN_CAPACITY 32
+#endif
+
+#ifndef UNSIGNED_UI_MENU_CAPACITY
+#define UNSIGNED_UI_MENU_CAPACITY 16
+#endif
+
+#ifndef UNSIGNED_UI_PAGE_STACK_CAPACITY
+#define UNSIGNED_UI_PAGE_STACK_CAPACITY 8
+#endif
+
+#ifndef UNSIGNED_UI_BLINK_LABEL_CLEAR_CAPACITY
+#define UNSIGNED_UI_BLINK_LABEL_CLEAR_CAPACITY 40
+#endif
+
+#endif
