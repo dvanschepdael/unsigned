@@ -3,7 +3,7 @@
  * @brief Implements batched Neo Geo renderer transaction and VRAMMOD cache.
  */
 
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 #include "system/vram_writer_internal.h"
 
 #include <ngdevkit/registers.h>

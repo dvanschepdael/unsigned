@@ -6,7 +6,7 @@
 #include "renderer/background_renderer.h"
 
 #include "display/sprite/limits.h"
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 
 /** Floor-divide pixels by one 16-pixel tile while returning a positive pixel remainder. */
 static s32 background_renderer_floor_div_16(s32 value, u8 *remainder) {

@@ -6,7 +6,7 @@
 #include "renderer/sprite_renderer.h"
 
 #include "display/sprite/limits.h"
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 
 /**
  * Mark transform fields that differ from the last chained hardware state.

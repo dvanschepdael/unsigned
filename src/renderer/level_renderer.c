@@ -10,8 +10,8 @@
 #include "level/level.h"
 #include "level/level_runtime.h"
 #include "renderer/actor_renderer.h"
-#include "renderer/renderer_backend.h"
 #include "renderer/sprite_renderer.h"
+#include "system/renderer_backend.h"
 
 /** Returns whether two inclusive hardware sprite ranges overlap. */
 static bool level_ranges_overlap(u16 first_a, u16 count_a, u16 first_b, u16 count_b) {

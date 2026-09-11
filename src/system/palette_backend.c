@@ -4,7 +4,7 @@
  */
 
 #include "display/sprite/palette.h"
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 
 #include <ngdevkit/registers.h>
 

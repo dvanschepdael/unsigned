@@ -4,7 +4,7 @@
  */
 
 #include "display/sprite/palette.h"
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 
 /** Load all 16 colors of one sprite palette into the active hardware palette bank. */
 void unsigned_sprite_palette_load(u8 palette, const u16 colors[U_SPRITE_PALETTE_COLOR_COUNT]) {

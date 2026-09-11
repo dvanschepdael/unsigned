@@ -109,7 +109,6 @@
 #include <renderer/actor_renderer.h>
 #include <renderer/background_renderer.h>
 #include <renderer/level_renderer.h>
-#include <renderer/renderer_backend.h>
 #include <renderer/sprite_renderer.h>
 #include <renderer/ui_renderer.h>
 #include <save/block.h>
@@ -127,6 +126,7 @@
 #include <system/credits_internal.h>
 #include <system/fix.h>
 #include <system/input.h>
+#include <system/renderer_backend.h>
 #include <system/runtime.h>
 #include <system/session.h>
 #include <system/session_internal.h>

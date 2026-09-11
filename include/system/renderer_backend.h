@@ -6,8 +6,8 @@
  * Renderer policy decides what must be drawn; concrete backends own hardware encoding and writes.
  */
 
-#ifndef UNSIGNED_RENDERER_BACKEND_H
-#define UNSIGNED_RENDERER_BACKEND_H
+#ifndef UNSIGNED_SYSTEM_RENDERER_BACKEND_H
+#define UNSIGNED_SYSTEM_RENDERER_BACKEND_H
 
 #include "display/sprite/sprite.h"
 #include "display/viewport/viewport.h"

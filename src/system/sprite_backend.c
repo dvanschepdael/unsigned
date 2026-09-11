@@ -4,7 +4,7 @@
  */
 
 #include "display/sprite/attributes.h"
-#include "renderer/renderer_backend.h"
+#include "system/renderer_backend.h"
 #include "system/video.h"
 #include "system/vram_writer_internal.h"
 
