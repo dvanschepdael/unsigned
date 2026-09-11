@@ -16,7 +16,7 @@
 #include "level/level.h"
 #include "level/level_manager.h"
 #include "level/level_runtime.h"
-#include "system/renderer/level_renderer.h"
+#include "renderer/level_renderer.h"
 
 /**
  * @brief Computes the total actor slots represented by the configured actor pools.
