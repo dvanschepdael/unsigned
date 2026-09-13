@@ -1,6 +1,6 @@
 /**
  * @file fix.c
- * @brief Implements Neo Geo FIX-layer text helpers.
+ * @brief Implements Neo Geo FIX-layer text and tile helpers.
  */
 
 #include "system/fix.h"
@@ -25,4 +25,28 @@ void unsigned_neo_geo_fix_center_text_tall(u8 row, u8 palette, const char *text)
     if (text != NULL) {
         ng_center_text_tall(row, palette, text);
     }
+}
+
+void unsigned_neo_geo_fix_draw_tile_strip(u8 column, u8 row, u8 palette, u16 base_tile, const u8 *tile_offsets, u8 count) {
+    if (tile_offsets == NULL || count == 0u || base_tile == 0u || column >= UNSIGNED_NEO_GEO_FIX_COLUMNS || row >= UNSIGNED_NEO_GEO_FIX_ROWS) {
+        return;
+    }
+
+    u8 drawable = count;
+    const u8 remaining_columns = (u8)(UNSIGNED_NEO_GEO_FIX_COLUMNS - column);
+    if (drawable > remaining_columns) {
+        drawable = remaining_columns;
+    }
+
+    char text[UNSIGNED_NEO_GEO_FIX_COLUMNS + 1u];
+    for (u8 i = 0u; i < drawable; ++i) {
+        if (tile_offsets[i] == 0xffu) {
+            return;
+        }
+        text[i] = (char)(tile_offsets[i] + 1u);
+    }
+    text[drawable] = '\0';
+
+    /* ng_text_args adds each non-zero byte to start_tile. Subtracting one makes byte 1 select base_tile. */
+    ng_text_args(column, row, (u8)(palette & 0x0fu), (u16)(base_tile - 1u), text);
 }

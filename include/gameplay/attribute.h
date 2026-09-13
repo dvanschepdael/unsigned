@@ -13,6 +13,8 @@ typedef struct UGameplayAttribute {
     s16 current_value;
     struct UGameplayAttribute *min_value;
     struct UGameplayAttribute *max_value;
+    /** Optional notification receiving this attribute after current_value changes. */
+    UCallbackFunc on_update;
 } UGameplayAttribute;
 
 typedef struct UGameplayAttributeContainer {
@@ -20,5 +22,12 @@ typedef struct UGameplayAttributeContainer {
     u8 capacity;
     UGameplayAttribute *instances;
 } UGameplayAttributeContainer;
+
+/**
+ * Set current_value and notify on_update once, after writing a different value.
+ * NULL attributes and unchanged values are ignored. No clamping is performed.
+ * Use this setter for runtime changes; direct initialization does not notify.
+ */
+void unsigned_gameplay_attribute_set_current_value(UGameplayAttribute *attribute, s16 value);
 
 #endif
