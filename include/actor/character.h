@@ -19,6 +19,12 @@ typedef struct UCharacter {
     UGameplayTagContainer tags;
 } UCharacter;
 
+/** Update logical facing and sprite flip from a horizontal direction. Zero leaves facing unchanged. */
+void unsigned_character_set_facing(UCharacter *character, s16 horizontal_direction);
+
+/** Move a character by direction * speed and update facing. Spatial constraints are caller-owned. */
+void unsigned_character_move(UCharacter *character, Vec2 direction, s16 speed);
+
 /**
  * @brief Advances the character by one scheduled engine frame.
  *

@@ -8,6 +8,8 @@
 
 #include <stdbool.h>
 
+#include "input/input.h"
+
 typedef struct UUIInput {
     bool navigate_previous_pressed;
     bool navigate_next_pressed;
@@ -23,5 +25,8 @@ typedef struct UUIInput {
  * @param input Input snapshot sampled or consumed by this API.
  */
 void unsigned_ui_input_clear(UUIInput *input);
+
+/** Translate the standard Neo Geo/controller navigation mapping from a sampled input state. */
+void unsigned_ui_input_from_controller(UUIInput *ui_input, const UInputState *input);
 
 #endif

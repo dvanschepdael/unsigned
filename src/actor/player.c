@@ -11,21 +11,24 @@ static bool unsigned_input_binding_matches(const UInputState *input, const UGame
         return false;
     }
 
+    UInputMask state = 0u;
     switch (binding->trigger) {
         case U_INPUT_TRIGGER_HOLD:
-            return (input->hold & binding->input) == binding->input;
-
+            state = input->hold;
+            break;
         case U_INPUT_TRIGGER_DOWN:
-            return (input->down & binding->input) == binding->input;
-
+            state = input->down;
+            break;
         case U_INPUT_TRIGGER_PRESSED:
-            return (input->pressed & binding->input) == binding->input;
-
+            state = input->pressed;
+            break;
         case U_INPUT_TRIGGER_RELEASED:
-            return (input->released & binding->input) == binding->input;
+            state = input->released;
+            break;
     }
 
-    return false;
+    const UInputMask matched = (UInputMask)(state & binding->input);
+    return binding->match == U_INPUT_MATCH_ANY ? matched != 0u : matched == binding->input;
 }
 
 /** Validates that a cached ability slot is still active and belongs to the same binding generation. */
@@ -70,7 +73,14 @@ void unsigned_player_tick(UPlayer *player) {
 }
 
 void unsigned_player_tick_input(UPlayer *player, UInputController *controller, UAbilityPool *abilities) {
-    if (player == NULL || player->character == NULL || controller == NULL || player->bindings == NULL || player->bindings->instances == NULL || player->bindings->count == 0u || player->bindings->count > player->bindings->capacity || abilities == NULL) {
+    if (player == NULL || controller == NULL) {
+        return;
+    }
+
+    /* Keep the sampled state accessible to active abilities that need held/released input semantics. */
+    player->input_state = &controller->state;
+
+    if (player->character == NULL || player->bindings == NULL || player->bindings->instances == NULL || player->bindings->count == 0u || player->bindings->count > player->bindings->capacity || abilities == NULL) {
         return;
     }
 
@@ -133,5 +143,6 @@ void unsigned_player_destroy(UPlayer *player, UAbilityPool *abilities) {
         }
     }
 
+    player->input_state = NULL;
     unsigned_character_destroy(player->character);
 }

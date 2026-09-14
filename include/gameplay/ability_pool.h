@@ -52,6 +52,15 @@ UAbilityPoolInstance *unsigned_gameplay_ability_pool_reserve(UAbilityPool *abili
  */
 void unsigned_gameplay_ability_pool_release(UAbilityPool *abilities, UAbilityPoolInstance *instance);
 
+/** Release every active ability whose granted tags are owned by `owner`. */
+void unsigned_gameplay_ability_pool_release_owner(UAbilityPool *abilities, UGameplayTagContainer *owner);
+
+/**
+ * Replace every active ability owned by `owner` with one new ability.
+ * Pool/tag capacity is preflighted before interruption so ordinary capacity rejection leaves the owner untouched.
+ */
+UAbilityPoolInstance *unsigned_gameplay_ability_pool_replace_owner(UAbilityPool *abilities, UGameplayTagContainer *owner, const UGameplayAbility *ability, void *args);
+
 /**
  * @brief Advances the gameplay ability pool by one scheduled engine frame.
  *

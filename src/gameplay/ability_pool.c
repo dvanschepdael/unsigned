@@ -83,6 +83,47 @@ void unsigned_gameplay_ability_pool_release(UAbilityPool *abilities, UAbilityPoo
     unsigned_gameplay_pool_release(&abilities->pool, instance);
 }
 
+
+void unsigned_gameplay_ability_pool_release_owner(UAbilityPool *abilities, UGameplayTagContainer *owner) {
+    if (abilities == NULL || owner == NULL) {
+        return;
+    }
+
+    for (u8 i = 0u; i < abilities->pool.capacity; ++i) {
+        if (abilities->instances[i].active && abilities->tag_owners[i] == owner) {
+            unsigned_gameplay_ability_pool_release(abilities, &abilities->instances[i]);
+        }
+    }
+}
+
+UAbilityPoolInstance *unsigned_gameplay_ability_pool_replace_owner(UAbilityPool *abilities, UGameplayTagContainer *owner, const UGameplayAbility *ability, void *args) {
+    if (abilities == NULL || owner == NULL || ability == NULL || abilities->pool.instances == NULL) {
+        return NULL;
+    }
+
+    bool frees_slot = false;
+    UGameplayTagContainer prospective = *owner;
+    for (u8 i = 0u; i < abilities->pool.capacity; ++i) {
+        if (!abilities->instances[i].active || abilities->tag_owners[i] != owner) {
+            continue;
+        }
+        frees_slot = true;
+        if (abilities->abilities[i] == NULL || !unsigned_gameplay_tag_remove(&prospective, &abilities->abilities[i]->granted_tags)) {
+            return NULL;
+        }
+    }
+
+    if (!frees_slot && abilities->pool.count >= abilities->pool.capacity) {
+        return NULL;
+    }
+    if (!unsigned_gameplay_tag_add_all(&prospective, &ability->granted_tags)) {
+        return NULL;
+    }
+
+    unsigned_gameplay_ability_pool_release_owner(abilities, owner);
+    return unsigned_gameplay_ability_pool_reserve(abilities, ability, owner, args);
+}
+
 void unsigned_gameplay_ability_pool_tick(UAbilityPool *abilities) {
     if (abilities != NULL) {
         unsigned_gameplay_pool_tick(&abilities->pool, ability_pool_release_callback, abilities);

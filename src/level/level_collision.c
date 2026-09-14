@@ -137,6 +137,10 @@ void level_collision_detect(ULevel *level) {
     }
 }
 
+const UCollisionHitContainer *unsigned_level_collision_hits(const ULevel *level) {
+    return level != NULL ? &level->collision.hits : NULL;
+}
+
 bool unsigned_level_collision_registration_complete(const ULevel *level) {
     return level != NULL && level->collision.registration_complete;
 }

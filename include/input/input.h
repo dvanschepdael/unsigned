@@ -26,6 +26,13 @@ typedef enum UInputButton {
     U_INPUT_BUTTON_SELECT = (1u << 9),
 } UInputButton;
 
+typedef enum UInputMatch {
+    /** Every button in the binding mask must match. Default/zero preserves legacy behavior. */
+    U_INPUT_MATCH_ALL = 0,
+    /** At least one button in the binding mask must match. */
+    U_INPUT_MATCH_ANY,
+} UInputMatch;
+
 typedef enum UInputTrigger {
     /** Repeated hold pulse derived from the per-button hold counters. */
     U_INPUT_TRIGGER_HOLD,
@@ -75,5 +82,8 @@ bool unsigned_input_manager_init(UInputManager *input, u8 player_count);
  * @param hold_frames Per-button frame counters used to derive repeat/hold input state.
  */
 void unsigned_input_controller_tick(UInputController *controller, UInputMask buttons_down, u8 hold_frames);
+
+/** Convert held D-pad input into a signed {-1,0,1} direction. Opposite directions cancel. */
+Vec2 unsigned_input_direction(const UInputState *input);
 
 #endif

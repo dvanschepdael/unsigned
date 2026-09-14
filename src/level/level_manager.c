@@ -67,6 +67,7 @@ bool unsigned_level_manager_init(ULevelManager *manager, ULevel *level, const UL
         manager->status = U_LEVEL_MANAGER_INVALID_GRAPH;
         return false;
     }
+    unsigned_state_graph_clock_reset(&manager->state_graph_clock, &manager->state_graph);
 
     const ULevelBinding *initial_binding = level_manager_binding(manager, graph->initial);
     if (initial_binding == NULL || initial_binding->definition == NULL) {
@@ -141,6 +142,7 @@ bool unsigned_level_manager_tick(ULevelManager *manager) {
         if (!unsigned_state_graph_try_start(&manager->state_graph)) {
             return false;
         }
+        unsigned_state_graph_clock_reset(&manager->state_graph_clock, &manager->state_graph);
         if (!level_manager_sync(manager)) {
             return false;
         }
@@ -150,7 +152,7 @@ bool unsigned_level_manager_tick(ULevelManager *manager) {
         return false;
     }
 
-    unsigned_state_graph_tick(&manager->state_graph);
+    unsigned_state_graph_clock_tick(&manager->state_graph_clock, &manager->state_graph);
     if (!level_manager_sync(manager)) {
         return false;
     }

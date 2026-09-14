@@ -42,6 +42,9 @@ typedef void (*UTrajectoryFunction)(UTrajectory *trajectory, void *context);
  * @return Fixed-point trajectory value.
  */
 s32 unsigned_physics_trajectory_fixed(s32 value);
+/** Evaluate a symmetric jump parabola in pixels. Common power-of-two durations use shift fast paths. */
+s16 unsigned_physics_trajectory_parabola_height(u16 elapsed, u16 duration, s16 height);
+
 /**
  * @brief Initializes and activates a frame-stepped trajectory from position, velocity, acceleration and duration.
  *

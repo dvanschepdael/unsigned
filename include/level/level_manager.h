@@ -7,6 +7,7 @@
 #define UNSIGNED_LEVEL_MANAGER_H
 
 #include "core/state/state_graph.h"
+#include "core/state/state_graph_clock.h"
 #include "level/level_definition.h"
 
 typedef struct ULevelBinding {
@@ -31,6 +32,7 @@ typedef enum ULevelManagerStatus {
 
 typedef struct ULevelManager {
     UStateGraph state_graph;
+    UStateGraphClock state_graph_clock;
     ULevel *level;
     const ULevelGraph *graph;
     const ULevelBinding *active_binding;

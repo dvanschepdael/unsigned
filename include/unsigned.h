@@ -39,6 +39,7 @@
 #include <core/pool/pool.h>
 #include <core/state/config.h>
 #include <core/state/state_graph.h>
+#include <core/state/state_graph_clock.h>
 #include <core/timer/config.h>
 #include <core/timer/timer.h>
 #include <core/timer/timer_pool.h>
@@ -103,6 +104,7 @@
 #include <physics/collision.h>
 #include <physics/collision_box.h>
 #include <physics/config.h>
+#include <physics/movement.h>
 #include <physics/trajectory.h>
 #include <physics/trajectory_path.h>
 #include <physics/trajectory_projection.h>

@@ -6,6 +6,7 @@
 #ifndef UNSIGNED_LEVEL_COLLISION_H
 #define UNSIGNED_LEVEL_COLLISION_H
 
+#include "collision/hit_detection.h"
 #include "core/types.h"
 
 struct ULevel;
@@ -15,6 +16,9 @@ bool unsigned_level_collision_registration_complete(const struct ULevel *level);
 
 /** Return true when a fixed collision-layer registration buffer overflowed. */
 bool unsigned_level_collision_registration_overflowed(const struct ULevel *level);
+
+/** Frame-local attacker/target hits detected for the current level tick. Do not retain past the frame. */
+const UCollisionHitContainer *unsigned_level_collision_hits(const struct ULevel *level);
 
 /** Return true when attack-hit results were truncated to UNSIGNED_COLLISION_HIT_CAPACITY. */
 bool unsigned_level_collision_hits_overflowed(const struct ULevel *level);

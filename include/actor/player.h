@@ -13,6 +13,7 @@
 typedef struct UGameplayAbilityBinding {
     UInputMask input;
     UInputTrigger trigger;
+    UInputMatch match;
     void *args;
     const UGameplayAbility *ability;
     /** Cached slot for this binding; valid only while `active_generation` still matches. */
@@ -30,6 +31,8 @@ typedef struct UGameplayAbilityBindingContainer {
 typedef struct UPlayer {
     UCharacter *character;
     UGameplayAbilityBindingContainer *bindings;
+    /** Latest controller snapshot routed to this player; valid while the controller remains alive. */
+    const UInputState *input_state;
     u8 controller_index;
 } UPlayer;
 

@@ -280,9 +280,24 @@ void unsigned_state_graph_tick(UStateGraph *graph) {
         tick_node(graph, graph->global);
     }
 
-    if (graph->current != NULL && graph->current != graph->global) {
-        tick_node(graph, graph->current);
+    const UStateGraphNode *active = graph->current;
+    if (active != NULL && active != graph->global) {
+        tick_node(graph, active);
     }
+}
+
+bool unsigned_state_graph_timeout(UStateGraph *graph) {
+    if (graph == NULL || graph->initial == NULL || graph->current == NULL) {
+        return false;
+    }
+
+    const UStateGraphNode *target = get_transition(graph, graph->current, U_TRANSITION_ON_TIMEOUT);
+    if (target == NULL) {
+        return false;
+    }
+
+    change_state(graph, target);
+    return true;
 }
 
 void unsigned_state_graph_stop(UStateGraph *graph) {

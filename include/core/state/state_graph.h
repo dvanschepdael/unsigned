@@ -14,7 +14,7 @@ typedef struct UStateGraphNode UStateGraphNode;
 
 typedef enum UTaskState { U_TASK_RUNNING = 0, U_TASK_SUCCESS, U_TASK_FAILED } UTaskState;
 
-typedef enum UTransitionTrigger { U_TRANSITION_ON_SUCCESS = 0, U_TRANSITION_ON_FAILED, U_TRANSITION_ON_COMPLETED, U_TRANSITION_ON_EVENT, U_TRANSITION_COUNT } UTransitionTrigger;
+typedef enum UTransitionTrigger { U_TRANSITION_ON_SUCCESS = 0, U_TRANSITION_ON_FAILED, U_TRANSITION_ON_COMPLETED, U_TRANSITION_ON_EVENT, U_TRANSITION_ON_TIMEOUT, U_TRANSITION_COUNT } UTransitionTrigger;
 
 typedef UTaskState (*UStateGraphTask)(UStateGraph *graph, void *context);
 typedef void (*UStateGraphCallback)(UStateGraph *graph, void *context);
@@ -52,6 +52,8 @@ struct UStateGraphNode {
     UStateGraphCallback enter;
     UStateGraphCallback exit;
     UStateGraphTaskContainer tasks;
+    /** Optional frame duration before U_TRANSITION_ON_TIMEOUT is evaluated; zero disables timeout. */
+    u16 duration_frames;
     const UStateGraphTransitionContainer *transitions[U_TRANSITION_COUNT];
 };
 
@@ -93,11 +95,21 @@ bool unsigned_state_graph_try_start(UStateGraph *graph);
 void unsigned_state_graph_send_event(UStateGraph *graph, UEvent event);
 
 /**
- * @brief Ticks global and active-state tasks once and applies success/failed/completed transitions.
+ * @brief Ticks global and active-state tasks once and applies task-driven transitions.
  *
  * @param graph Initialized graph to advance by one engine frame.
  */
 void unsigned_state_graph_tick(UStateGraph *graph);
+
+/**
+ * @brief Applies the first permitted timeout transition from the active node/ancestors.
+ *
+ * @details Timing is deliberately external to UStateGraph. Callers such as UStateGraphClock
+ *          signal expiry through this function after owning/advancing their temporal state.
+ *
+ * @return true when a timeout transition changed state; false otherwise.
+ */
+bool unsigned_state_graph_timeout(UStateGraph *graph);
 
 /**
  * @brief Exits the active state and leaves the validated graph stopped but reusable.

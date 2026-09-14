@@ -34,6 +34,8 @@ void unsigned_actor_destroy(UActor *actor) {
     actor->active = false;
 }
 
+
+
 /** Returns whether the previous actor already belongs before the current actor in the requested stable draw order. */
 static bool actor_order_before(const UActor *previous, const UActor *current, UActorSort order) {
     if (previous->position.y < current->position.y) {

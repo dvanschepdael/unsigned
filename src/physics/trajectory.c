@@ -10,6 +10,27 @@ s32 unsigned_physics_trajectory_fixed(s32 value) {
     return value * (s32)U_TRAJECTORY_FIXED_ONE;
 }
 
+
+s16 unsigned_physics_trajectory_parabola_height(u16 elapsed, u16 duration, s16 height) {
+    if (duration == 0u || height <= 0 || elapsed == 0u || elapsed >= duration) {
+        return 0;
+    }
+
+    const s32 t = elapsed;
+    const s32 numerator = 4 * (s32)height * t * ((s32)duration - t);
+    switch (duration) {
+        case 8u:   return unsigned_math_saturate_s16(numerator >> 6);
+        case 16u:  return unsigned_math_saturate_s16(numerator >> 8);
+        case 32u:  return unsigned_math_saturate_s16(numerator >> 10);
+        case 64u:  return unsigned_math_saturate_s16(numerator >> 12);
+        case 128u: return unsigned_math_saturate_s16(numerator >> 14);
+        default: {
+            const s32 denominator = (s32)duration * duration;
+            return unsigned_math_saturate_s16(numerator / denominator);
+        }
+    }
+}
+
 /** Converts the trajectory fixed-point accumulator to its integer pixel coordinate. */
 static s16 trajectory_fixed_to_pixel(s32 value) {
     return unsigned_math_saturate_s16(value / U_TRAJECTORY_FIXED_ONE);

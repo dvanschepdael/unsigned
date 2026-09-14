@@ -14,7 +14,7 @@ typedef struct UGameplayAttribute {
     struct UGameplayAttribute *min_value;
     struct UGameplayAttribute *max_value;
     /** Optional notification receiving this attribute after current_value changes. */
-    UCallbackFunc on_update;
+    UCallbackFunc on_change;
 } UGameplayAttribute;
 
 typedef struct UGameplayAttributeContainer {
@@ -24,10 +24,13 @@ typedef struct UGameplayAttributeContainer {
 } UGameplayAttributeContainer;
 
 /**
- * Set current_value and notify on_update once, after writing a different value.
- * NULL attributes and unchanged values are ignored. No clamping is performed.
+ * Set current_value and notify on_change once, after writing a different value.
+ * Values are clamped to optional min/max attributes. NULL attributes and unchanged values are ignored.
  * Use this setter for runtime changes; direct initialization does not notify.
  */
 void unsigned_gameplay_attribute_set_current_value(UGameplayAttribute *attribute, s16 value);
+
+/** Add a signed delta to current_value with saturation to s16 and the same min/max clamping rules. */
+void unsigned_gameplay_attribute_add_current_value(UGameplayAttribute *attribute, s16 delta);
 
 #endif

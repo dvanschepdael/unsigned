@@ -50,3 +50,24 @@ void unsigned_input_controller_tick(UInputController *controller, UInputMask but
 
     controller->buttons_down = buttons_down;
 }
+
+Vec2 unsigned_input_direction(const UInputState *input) {
+    Vec2 direction = { 0 };
+    if (input == NULL) {
+        return direction;
+    }
+
+    if ((input->down & U_INPUT_BUTTON_LEFT) != 0u) {
+        --direction.x;
+    }
+    if ((input->down & U_INPUT_BUTTON_RIGHT) != 0u) {
+        ++direction.x;
+    }
+    if ((input->down & U_INPUT_BUTTON_UP) != 0u) {
+        --direction.y;
+    }
+    if ((input->down & U_INPUT_BUTTON_DOWN) != 0u) {
+        ++direction.y;
+    }
+    return direction;
+}
