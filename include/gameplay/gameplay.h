@@ -12,6 +12,8 @@
 #include "core/types.h"
 #include "gameplay/tag.h"
 
+typedef bool (*UGameplayCompleteFunction)(void *context);
+
 typedef struct UGameplayObject {
     /** Duration in engine ticks for timed pool users; zero may mean indefinite depending on the wrapper type. */
     u16 duration;
@@ -21,6 +23,8 @@ typedef struct UGameplayObject {
     UCallbackFunc activate;
     /** Called once per gameplay-pool tick while the instance remains current. */
     UCallbackFunc tick;
+    /** Optional completion predicate evaluated after tick; true requests normal pool release. */
+    UGameplayCompleteFunction complete;
     /** Called on normal release after the slot has been detached from the pool. */
     UCallbackFunc end;
 } UGameplayObject;

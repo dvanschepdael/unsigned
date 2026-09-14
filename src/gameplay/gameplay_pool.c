@@ -91,6 +91,20 @@ void unsigned_gameplay_pool_tick(UPoolInstanceContainer *pool, UGameplayPoolRele
             continue;
         }
 
+        /* Content owns its completion rule; the pool owns the actual release lifecycle. */
+        const bool completed = object->complete != NULL && object->complete(args);
+        if (!gameplay_pool_instance_is_current(pool, instance, generation, object, args)) {
+            continue;
+        }
+        if (completed) {
+            if (release_function != NULL) {
+                release_function(release_context, instance);
+            } else {
+                unsigned_gameplay_pool_release(pool, instance);
+            }
+            continue;
+        }
+
         if (instance->elapsed < UINT16_MAX) {
             ++instance->elapsed;
         }
