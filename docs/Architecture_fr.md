@@ -1,6 +1,6 @@
 # Architecture technique d'Unsigned
 
-Ce document décrit l'organisation **actuelle** du moteur et du projet de démonstration. Le principe central est de garder les règles de jeu et la simulation séparées des détails Neo Geo afin de pouvoir tester la majorité du moteur sur hôte.
+Ce document décrit l'organisation **actuelle** du moteur et du projet de démonstration. Le principe central consiste à séparer les règles de jeu et la simulation des détails Neo Geo afin de pouvoir tester la majorité du moteur sur hôte.
 
 ## 1. Sens des dépendances
 
@@ -33,14 +33,14 @@ core = types et briques génériques partagées par les couches moteur
 save = stockage persistant générique + backend plateforme
 ```
 
-Les dépendances ne sont pas toutes strictement verticales, mais cette direction donne la règle à respecter :
+Les dépendances ne sont pas toutes strictement verticales, mais cette direction définit la règle d'organisation :
 
 - `src` décrit le jeu et compose le moteur ;
 - `engine/display` décrit ce qui doit être présenté ;
 - `engine/renderer` décide comment transformer cet état en opérations de rendu ;
 - `engine/system` réalise les opérations spécifiques à la Neo Geo et au BIOS.
 
-Le code de gameplay ne doit donc pas écrire directement dans la VRAM ou lire la RAM BIOS pour contourner les APIs du moteur.
+Le code de gameplay accède à la VRAM et aux services BIOS à travers les APIs du moteur, ce qui maintient les détails matériels dans `engine/system`.
 
 ## 2. Arborescence actuelle
 
@@ -131,7 +131,7 @@ src/
 7. initialiser le viewport ;
 8. démarrer le flux de niveau, soit par `ULevelGraph`, soit par un `initial_level` direct.
 
-La mémoire à capacité variable est fournie par l'application via `UGameInstanceStorage`. Le moteur ne prend pas possession de ces tableaux et ne les libère pas.
+La mémoire à capacité variable est fournie par l'application via `UGameInstanceStorage`. Ces tableaux restent la propriété de l'application pendant toute leur utilisation par le moteur.
 
 En cas d'échec, `unsigned_game_instance_destroy()` remet l'instance dans un état vide tout en laissant les buffers à leur propriétaire.
 
@@ -163,7 +163,7 @@ ng_wait_vblank()
 transport audio
 ```
 
-La boucle n'est donc pas un simple `while (1)` appartenant entièrement au jeu : le BIOS reste propriétaire d'une partie du cycle de vie.
+La boucle combine le cycle applicatif et le cycle de vie BIOS : le BIOS reste propriétaire d'une partie des transitions système.
 
 ### Couche application
 
@@ -239,7 +239,7 @@ L'ordre réel dans `engine/level/level.c` est :
 
 Le moteur détecte les interactions ; la définition du niveau décide de leur signification métier via `resolve_hits`.
 
-`resolve_hits` doit consommer les résultats déjà produits par le moteur via `unsigned_level_collision_hits()`. Le gameplay ne doit pas reconstruire les hitboxes/hurtboxes en world-space pour refaire une seconde détection : la géométrie appartient au pipeline collision, tandis que les dégâts, garde, knockdown ou règles de combo appartiennent au jeu.
+`resolve_hits` parcourt les résultats déjà produits par le moteur via `unsigned_level_collision_hits()`. Le pipeline collision reste propriétaire de la géométrie et des intersections hitbox/hurtbox ; le gameplay applique ensuite les dégâts, la garde, le knockdown et les règles de combo.
 
 ## 6. Acteurs, personnages et pools
 
@@ -270,7 +270,7 @@ UProjectile -> référence un UActor + trajectoire/lifetime
 
 `UActorContainer` est une vue non propriétaire sur les acteurs actifs réunis depuis les pools spécialisés.
 
-`UActor` ne possède volontairement aucune notion de zone jouable ou de bounds. Il stocke une position monde ; `UCharacter` fournit les opérations génériques de déplacement/orientation, mais la décision de contraindre ce déplacement reste extérieure à l'acteur.
+`UActor` stocke la présence dans le monde, notamment une position monde. `UCharacter` fournit les opérations génériques de déplacement/orientation, tandis que la politique de contrainte spatiale appartient au niveau ou au gameplay.
 
 ### Mouvement et contraintes spatiales
 
@@ -299,9 +299,9 @@ Vec2 world position
 - `UMovementBounds` et `unsigned_physics_movement_constrain()` sont dans `engine/physics/movement.h` / `engine/physics/movement.c` ;
 - le propriétaire du déplacement décide explicitement si ces bounds s'appliquent. Un projectile ou un NPC peut donc rester libre de sortir de la zone jouable.
 
-Cette séparation évite de faire de `UActor` le propriétaire d'une politique de niveau.
+Cette séparation attribue à `UActor` la position monde et au niveau/gameplay la politique spatiale.
 
-Les pools utilisent des slots fixes. `UPoolInstance.generation` sert à détecter la réutilisation d'un même slot : une adresse identique ne signifie pas forcément qu'il s'agit encore de la même instance logique.
+Les pools utilisent des slots fixes. `UPoolInstance.generation` sert à détecter la réutilisation d'un même slot : une adresse identique peut correspondre à une nouvelle instance logique.
 
 ## 7. Gameplay : attributes, abilities, effects, cues et tags
 
@@ -322,7 +322,7 @@ Les principaux concepts sont :
 - **Cue** : événement gameplay temporisé ;
 - **Tag** : identifiant à compteur de références utilisé pour accorder ou bloquer des états.
 
-Les callbacks gameplay peuvent libérer ou réutiliser un slot pendant leur propre exécution. Les contrôles de génération et d'identité dans les pools évitent alors de poursuivre un travail sur une instance devenue obsolète.
+Les callbacks gameplay peuvent libérer ou réutiliser un slot pendant leur propre exécution. Les contrôles de génération et d'identité dans les pools arrêtent alors le traitement de l'ancienne instance et protègent la nouvelle.
 
 ### Input vers abilities
 
@@ -331,28 +331,28 @@ Les callbacks gameplay peuvent libérer ou réutiliser un slot pendant leur prop
 - `U_INPUT_MATCH_ALL` : tous les boutons du masque doivent matcher ;
 - `U_INPUT_MATCH_ANY` : au moins un bouton du masque suffit.
 
-Le déplacement de la démo utilise ainsi un seul binding `ANY` couvrant le D-pad complet. Une diagonale n'instancie donc qu'une ability de déplacement au lieu d'une ability par direction.
+Le déplacement de la démo utilise ainsi un seul binding `ANY` couvrant le D-pad complet. Une diagonale instancie une seule ability de déplacement.
 
 `UPlayer.input_state` expose le snapshot courant aux abilities qui ont besoin d'un contrôle continu, par exemple le saut d'Arthur.
 
 ### Interruption/remplacement par owner
 
-`UAbilityPool` fournit des opérations owner-level pour éviter qu'un personnage inspecte les tableaux internes du pool :
+`UAbilityPool` fournit des opérations owner-level qui encapsulent les tableaux internes du pool :
 
 - `unsigned_gameplay_ability_pool_release_owner()` ;
 - `unsigned_gameplay_ability_pool_replace_owner()`.
 
-Le remplacement prévalide la capacité du pool et la capacité des tags pour l'état prospectif avant de retirer les abilities existantes. Les réactions comme Hurt/Knockdown/Caught peuvent donc interrompre un personnage sans coupler le code du personnage à la représentation interne du pool.
+Le remplacement prévalide la capacité du pool et la capacité des tags pour l'état prospectif avant de retirer les abilities existantes. Les réactions comme Hurt/Knockdown/Caught peuvent donc interrompre un personnage tout en gardant la représentation interne du pool encapsulée.
 
 ### Attributes
 
-`unsigned_gameplay_attribute_set_current_value()` applique les bornes et ne notifie `on_change` que lorsque la valeur finale change réellement. `unsigned_gameplay_attribute_add_current_value()` ajoute un delta signé avec saturation `s16`, puis réutilise les mêmes règles de clamp/notification.
+`unsigned_gameplay_attribute_set_current_value()` applique les bornes et notifie `on_change` lorsque la valeur finale change réellement. `unsigned_gameplay_attribute_add_current_value()` ajoute un delta signé avec saturation `s16`, puis réutilise les mêmes règles de clamp/notification.
 
 ## 8. State graph : logique et temps séparés
 
-`UStateGraph` (`engine/core/state/state_graph.h` / `engine/core/state/state_graph.c`) ne contient que l'état logique d'exécution : contexte, nœuds global/initial/courant, tasks et transitions. Il ne possède pas de compteur temporel.
+`UStateGraph` (`engine/core/state/state_graph.h` / `engine/core/state/state_graph.c`) contient l'état logique d'exécution : contexte, nœuds global/initial/courant, tasks et transitions. Le temps écoulé est porté par le composant optionnel `UStateGraphClock` (`engine/core/state/state_graph_clock.h` / `engine/core/state/state_graph_clock.c`).
 
-Les nœuds peuvent déclarer `duration_frames`, mais le temps écoulé est possédé par le composant optionnel `UStateGraphClock` (`engine/core/state/state_graph_clock.h` / `engine/core/state/state_graph_clock.c`) :
+Les nœuds peuvent déclarer `duration_frames` :
 
 ```text
 UStateGraphNode.duration_frames   définition stable
@@ -370,14 +370,14 @@ UStateGraphClock               état temporel optionnel
 
 Cette séparation a deux conséquences :
 
-- un graph qui n'utilise pas de timeout n'a pas à stocker `elapsed_frames` ;
-- le propriétaire du runtime choisit s'il a besoin d'un clock. `ULevelManager` en possède un en mode graph-driven ; le mode direct n'en dépend pas.
+- un graph sans timeout fonctionne sans stockage temporel additionnel ;
+- le propriétaire du runtime choisit s'il a besoin d'un clock. `ULevelManager` en possède un en mode graph-driven ; le mode direct fonctionne sans ce composant.
 
 ## 9. TLSS
 
 TLSS est dans `engine/core/tlss/`.
 
-Il fournit des cadences de simulation 1/2/4/8/16 frames et distribue les phases entre les entrées afin de ne pas réveiller toutes les tâches ralenties en même temps.
+Il fournit des cadences de simulation 1/2/4/8/16 frames et distribue les phases entre les entrées afin d'étaler les réveils des tâches ralenties.
 
 Le niveau contient une configuration séparée pour :
 
@@ -386,7 +386,7 @@ Le niveau contient une configuration séparée pour :
 
 Les NPC peuvent être classés `ACTIVE`, `OFFSCREEN` ou `DORMANT`. `engine/level/level_ai.c` choisit leur activité selon le viewport, puis `engine/actor/npc_ai.c` applique la cadence TLSS correspondante.
 
-La collision utilise également TLSS lors de la résolution des hits/projectiles. Une hitbox nouvellement active peut forcer une résolution immédiate afin de ne pas perdre sa première frame active.
+La collision utilise également TLSS lors de la résolution des hits/projectiles. Une hitbox nouvellement active peut forcer une résolution immédiate afin de préserver sa première frame active.
 
 ## 10. Collision : physique et sens gameplay
 
@@ -400,7 +400,7 @@ Cette couche gère les primitives physiques indépendantes du gameplay :
 - projection des trajectoires ;
 - `unsigned_physics_trajectory_parabola_height()` pour la hauteur parabolique générique.
 
-Elle ne connaît ni joueur, ni NPC, ni attaque. Une ability comme le saut d'Arthur choisit sa hauteur et ses règles de charge, puis réutilise la primitive de trajectoire du moteur.
+Elle manipule la géométrie, les contraintes et les trajectoires. Une ability comme le saut d'Arthur choisit sa hauteur et ses règles de charge, puis réutilise la primitive de trajectoire du moteur.
 
 ### `engine/collision`
 
@@ -423,13 +423,13 @@ Le niveau orchestre la frame :
 6. résout les projectiles ;
 7. détecte les couples attaquant/cible.
 
-Une registration incomplète invalide les résultats de collision de la frame. Ce comportement évite d'obtenir un résultat dépendant de l'ordre d'insertion lorsque les buffers fixes sont saturés.
+Une registration incomplète invalide les résultats de collision de la frame. Ce comportement garantit un résultat indépendant de l'ordre d'insertion lorsque les buffers fixes sont saturés.
 
-Les couples détectés sont exposés comme `UCollisionHit` frame-local. `unsigned_level_collision_hits()` permet au callback `resolve_hits` de les parcourir. Le code métier peut ensuite appliquer dégâts/garde/réactions ou dédupliquer une activation, mais ne doit pas refaire l'intersection géométrique déjà décidée par l'engine.
+Les couples détectés sont exposés comme `UCollisionHit` frame-local. `unsigned_level_collision_hits()` permet au callback `resolve_hits` de les parcourir. Le code métier applique ensuite dégâts/garde/réactions ou déduplique une activation, tandis que l'intersection géométrique reste la responsabilité du moteur.
 
 ## 11. Display, renderer et system
 
-La nouvelle structure sépare explicitement trois responsabilités.
+La structure sépare explicitement trois responsabilités.
 
 ### `engine/display`
 
@@ -473,13 +473,13 @@ Contient les détails plateforme :
 - writer VRAM ;
 - save backend.
 
-`engine/system/renderer_backend.h` est la frontière appelée par les renderers pour demander des opérations matérielles sans exposer leurs détails d'encodage dans la logique de niveau.
+`engine/system/renderer_backend.h` est la frontière appelée par les renderers pour demander des opérations matérielles tout en gardant les détails d'encodage hors de la logique de niveau.
 
 ## 12. Backgrounds et sprites
 
 `engine/renderer/background_renderer.c` traite les backgrounds comme des bandes de sprites matériels réutilisables. Le cache évite de réécrire l'ensemble de l'écran lors d'un simple scroll.
 
-`engine/renderer/sprite_renderer.c` utilise l'état dirty du sprite pour ne pousser que les parties modifiées vers le backend : graphisme, position, shrink, etc.
+`engine/renderer/sprite_renderer.c` utilise l'état dirty du sprite pour pousser uniquement les parties modifiées vers le backend : graphisme, position, shrink, etc.
 
 `engine/renderer/level_renderer.c` encadre le rendu par :
 
@@ -511,7 +511,7 @@ engine/system/fix.c
 
 Exemple actuel : `src/hud/demo_hud.c` construit un `UUIScreen`, une `UUIProgressBar`, un `UUIRenderer` et un `UNeoGeoUIRenderer`, puis rend l'ensemble sur le FIX layer.
 
-La progress bar peut être liée à un `UGameplayAttribute`. Le widget conserve une progression normalisée 0..256 afin d'éviter de recalculer une division dans le renderer à chaque frame. Le HUD actuel conserve volontairement la propriété des callbacks `on_change` de Health et de ses bornes pendant le binding ; cette politique reste dans `src/hud/` et n'est pas une responsabilité du moteur.
+La progress bar peut être liée à un `UGameplayAttribute`. Le widget conserve une progression normalisée 0..256, directement réutilisable par le renderer à chaque frame. Le HUD actuel conserve volontairement la propriété des callbacks `on_change` de Health et de ses bornes pendant le binding ; cette politique reste dans `src/hud/`.
 
 Pour les menus, `unsigned_ui_input_from_controller()` transforme un `UInputState` en commandes UI standard (navigation, valeur, confirm, cancel). Le mapping de contrôleur est ainsi centralisé dans `engine/display/ui/input.h` / `engine/display/ui/input.c`, tandis que la signification d'un écran concret reste dans `src/menu/`.
 
@@ -533,7 +533,7 @@ Le driver projet est actuellement dans `src/audio/sound_driver.s`.
 
 Le backend plateforme est dans `engine/system/save_backend.c`.
 
-Les sets utilisent une génération cohérente entre blocs afin qu'une écriture interrompue ne soit pas prise pour une sauvegarde complète valide.
+Les sets utilisent une génération cohérente entre blocs afin qu'une écriture interrompue soit reconnue distinctement d'une sauvegarde complète valide.
 
 ## 16. Runtime Neo Geo et BIOS
 
@@ -554,7 +554,7 @@ Le détail du cycle USER 1/2/3, du GAME START COMPULSION, du transport audio et 
 
 `src/game/demo_flow.c` reste une règle applicative. Il décrit les scènes via une table de règles (timeout/event/failure owner) au lieu de disperser ces transitions dans de gros `switch`. Il utilise `UTimerPool` pour les durées de présentation et pour exposer le compte à rebours au HUD.
 
-Ce flow ne doit pas être confondu avec `UStateGraphClock` : le premier orchestre le scénario concret de la démo ; le second est un composant générique optionnel pour chronométrer un `UStateGraph`.
+`demo_flow.c` orchestre le scénario concret de la démo ; `UStateGraphClock` fournit un composant générique optionnel pour chronométrer un `UStateGraph`. Les deux mécanismes répondent à des responsabilités distinctes.
 
 ## 17. Frontière entre moteur et jeu
 
@@ -569,4 +569,4 @@ Une règle pratique permet de choisir où ajouter du code :
 - personnage concret : `src/characters/` ;
 - interface concrète : `src/menu/` ou `src/hud/`.
 
-Cette séparation est la base à préserver lors des prochaines évolutions de l'architecture.
+Cette séparation constitue la base des prochaines évolutions de l'architecture.
