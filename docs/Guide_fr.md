@@ -1,12 +1,12 @@
 # Débuter dans Unsigned
 
-Ce guide s'adresse à un développeur qui connaît les bases du C et découvre le moteur et/ou la Neo Geo. La lecture s'appuie sur quatre repères : **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**. Ces repères permettent de retrouver rapidement la responsabilité d'un sous-système sans mémoriser chaque fichier.
+Ce guide s'adresse à un développeur qui connaît les bases du C et découvre le moteur et/ou la Neo Geo. La lecture s'organise autour de quatre questions structurantes : **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**. Ces questions permettent de retrouver rapidement la responsabilité d'un sous-système sans mémoriser chaque fichier.
 
 ## 1. Les cinq repères à connaître
 
 ### `UGameInstance` : la racine du moteur
 
-`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau, renderer, level manager, viewport et audio.
+`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau, level renderer, level manager, viewport et audio.
 
 `unsigned_game_instance_init()` reçoit des buffers déjà alloués via `UGameInstanceStorage`. Les capacités se dimensionnent au démarrage, ce qui maintient une utilisation mémoire déterministe pendant la partie.
 
@@ -33,10 +33,10 @@ La définition reste valide pendant toute la durée d'utilisation du niveau.
 - collisions ;
 - background ;
 - caméra ;
-- gameplay runtime ;
+- `UGameplayRuntime` ;
 - définition active et contexte applicatif.
 
-La séparation `ULevelDefinition` / `ULevel` distingue clairement les données de contenu de l'état runtime.
+La séparation `ULevelDefinition` / `ULevel` distingue clairement les données de contenu de l'état d'exécution.
 
 ### `UActor` / `UCharacter` : monde et combat
 
@@ -78,7 +78,7 @@ engine/
   game/       UGameInstance
 
 src/
-  game/       composition et flow de la démo
+  game/       composition et scénario de la démo
   characters/ personnages concrets
   levels/     niveaux concrets
   menu/       menus
@@ -110,7 +110,7 @@ engine/system/runtime.c
         |      |      +--> viewport
         |      |      +--> audio
         |      |
-        |      +--> demo flow / stage / menu
+        |      +--> demo scenario / stage / menu
         |
         +--> demo_loop_render()
         |      +--> unsigned_game_instance_render()
@@ -120,7 +120,7 @@ engine/system/runtime.c
         +--> transport audio
 ```
 
-Le BIOS reste autoritaire sur certaines transitions système. La boucle de jeu se lit donc comme une coopération entre le runtime applicatif et le cycle de vie BIOS, plutôt que comme une boucle principale entièrement autonome.
+Le BIOS reste autoritaire sur certaines transitions système. La boucle de jeu se lit donc comme une coopération entre la boucle applicative et le cycle de vie BIOS, plutôt que comme une boucle principale entièrement autonome.
 
 ## 4. Lire une frame de niveau
 
@@ -253,13 +253,13 @@ Le contenu concret va dans `src/levels/<nom_du_niveau>/`.
 3. utiliser `load` pour le setup impératif complémentaire aux données ;
 4. utiliser `enter` / `exit` pour le changement d'état autour du niveau actif ;
 5. utiliser `unload` pour annuler le travail de `load` ;
-6. exposer la définition à `src/game/demo_scenes.c` ou au flow concerné.
+6. exposer la définition à `src/game/demo_scenes.c` ou au scénario concerné.
 
 Le chargement est transactionnel : une erreur déclenche le rollback du contenu déjà installé.
 
 ## 7. Display, renderer et system : trois responsabilités complémentaires
 
-Cette séparation est essentielle dans la structure actuelle.
+Cette séparation est essentielle dans la structure actuelle. `engine/renderer` désigne le sous-système qui porte la politique de rendu ; les types comme `UUIRenderer` et `UNeoGeoUIRenderer` sont les objets et adaptateurs utilisés dans cette chaîne de rendu.
 
 ### `engine/display`
 
@@ -368,7 +368,7 @@ Si les buffers de registration sont saturés, la frame de collision est invalid�
 
 ## 10. State graph : séparer logique et temps
 
-`UStateGraph` possède l'état logique courant. `UStateGraphNode.duration_frames` est une donnée de définition ; `UStateGraphClock` porte le runtime temporel optionnel.
+`UStateGraph` possède l'état logique courant. `UStateGraphNode.duration_frames` est une donnée de définition ; `UStateGraphClock` porte l'état temporel optionnel.
 
 Le pattern est :
 
