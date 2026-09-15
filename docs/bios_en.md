@@ -1,191 +1,139 @@
 # Neo Geo BIOS integration
 
-French version: [`bios_fr.md`](bios_fr.md)
-
-Unsigned keeps Neo Geo BIOS lifecycle code under `src/system/` and exposes the corresponding public platform APIs under `include/system/`. Game code works with runtime phases and typed player/session state while BIOS RAM access, callbacks, credit routing, sound transport and persistent cabinet settings remain in the system layer.
+Unsigned keeps BIOS lifecycle rules inside `engine/system/neogeo`. Game code works with runtime phases and typed player state; it does not read BIOS RAM or recreate BIOS events from controller input.
 
 ## Lifecycle boundary
 
-| BIOS request | ngdevkit entry | Unsigned behavior |
+| BIOS request | ngdevkit entry | Runtime behavior |
 | --- | --- | --- |
 | USER 0 | `rom_mvs_startup_init` | handled by ngdevkit startup code |
-| USER 1 | `main()` | optional eye catcher; no USER 2/3 runtime initialization |
+| USER 1 | `main()` | optional eye catcher; no game initialization |
 | USER 2 | `main()` | initialize, ATTRACT, optional GAME/GAME_OVER, shutdown |
-| USER 3 | `main_mvs_title()` | initialize, TITLE, GAME/GAME_OVER, shutdown |
+| USER 3 | `main_mvs_title()` | initialize, TITLE, optional GAME/GAME_OVER, shutdown |
 
-`BIOS_USER_REQUEST` is interpreted through the internal `UNeoGeoBiosRequest` type declared in `include/system/bios_state_internal.h`. `UNeoGeoPhase`, declared in `include/system/runtime.h`, is the application-facing phase model. A single BIOS USER request can therefore contain several Unsigned phases.
-
-`src/system/runtime.c` translates those BIOS entries into the runtime sequence. VBlank remains the synchronization boundary: ngdevkit runs `SYSTEM_IO`, BIOS-maintained controller state and callbacks are updated, then Unsigned consumes that state during the following frame.
+`BIOS_USER_REQUEST` is interpreted through the internal `UNeoGeoBiosRequest` type shared by the Neo Geo runtime/callback layer. `UNeoGeoPhase` is a game-facing concept: one USER request can run several phases.
 
 ## BIOS callbacks
 
-`PLAYER_START` and `COIN_SOUND` are authoritative BIOS callbacks. Their cartridge-side implementations live in `src/system/bios_callbacks.c`.
+`PLAYER_START` and `COIN_SOUND` are authoritative BIOS events. Unsigned does not synthesize them from controller changes or `BIOS_COMPULSION_TIMER`.
 
 A runtime binding has three internal states:
 
-- `UNBOUND`: no USER 2/3 application runtime is active;
-- `INITIALIZING`: `initialize()` is running;
-- `READY`: initialization completed and `PLAYER_START` requests may be filtered through `accept_start`.
+- `UNBOUND`: no USER 2/3 runtime is active; START requests are rejected;
+- `INITIALIZING`: `initialize()` is running; START requests are rejected;
+- `READY`: initialization completed; START requests may be filtered by `accept_start`.
 
-This state machine keeps `PLAYER_START` from entering GAME with a partially initialized application context.
+This prevents a VBlank/BIOS callback from entering GAME with a partially initialized application context.
 
-### `PLAYER_START` handshake
+### PLAYER_START handshake
 
 `neo_geo_bios_process_start()` performs the cartridge side of the handshake:
 
 1. read P1..P4 request bits from `BIOS_START_FLAG`;
 2. remove players already in `PLAYING`;
-3. accept requests only while the runtime binding is `READY`;
-4. pass candidate bits to `accept_start` when the application provides that callback;
-5. write the accepted mask back to `BIOS_START_FLAG`;
+3. reject the whole request unless the runtime is `READY`;
+4. let `accept_start` clear additional requested bits;
+5. write only accepted bits back to `BIOS_START_FLAG`;
 6. prepare `BIOS_CREDIT_DEC1..4` for accepted players;
 7. move accepted players to `PLAYING`;
-8. set `BIOS_USER_MODE = GAME` when at least one player is accepted.
+8. set `BIOS_USER_MODE = GAME` when at least one player was accepted.
 
-The BIOS performs the actual MVS credit decrement after the cartridge callback returns.
+The BIOS owns the actual MVS credit decrement after the callback returns.
 
-## Player and session state
+## Player state
 
-Unsigned uses the BIOS `PLAYER_MOD` values directly through `src/system/session.c`:
+Unsigned uses the BIOS `PLAYER_MOD` values directly:
 
 | State | Meaning |
 | --- | --- |
 | `NEVER_PLAYED` | slot has not participated |
 | `PLAYING` | active gameplay |
-| `CONTINUE` | waiting for a continue; still participates in the GAME session |
-| `GAME_OVER` | terminal state for that player |
+| `CONTINUE` | waiting for a continue; keeps the GAME session alive |
+| `GAME_OVER` | terminal for that player |
 
-Public transitions are exposed by `include/system/session.h`:
+Game code changes player state through controlled transitions:
 
 - `unsigned_neo_geo_player_begin_continue()`: `PLAYING -> CONTINUE`;
 - `unsigned_neo_geo_player_game_over()`: `PLAYING/CONTINUE -> GAME_OVER`;
-- a later accepted BIOS `PLAYER_START` moves the selected slot to `PLAYING` again;
-- `unsigned_neo_geo_request_game_over()` applies the terminal transition to every participating player;
-- `unsigned_neo_geo_end_session()` also closes the local runtime session.
+- a later accepted BIOS `PLAYER_START` moves `CONTINUE -> PLAYING`.
 
-GAME stays active while at least one player is either `PLAYING` or `CONTINUE`. GAME_OVER starts after participating players have left those two states, unless the local session has already been explicitly ended.
+`unsigned_neo_geo_request_game_over()` applies the terminal transition to every participating player. `unsigned_neo_geo_end_session()` additionally closes the local runtime session.
 
 ## MVS credits
 
-The generic runtime models the standard P1/P2 credit counters.
+The generic runtime models the standard P1/P2 credit counters only.
 
 - Japan uses the shared P1 credit pool;
-- US and Europe use split P1/P2 pools;
-- P3/P4 credit ownership is left to BIOS/system-specific extensions rather than inferred by the generic API.
+- US and Europe MVS use separate P1/P2 pools;
+- P3/P4 credit ownership is not guessed because 4-player routing depends on the BIOS/system extension.
 
-`src/system/credits.c` reads the BIOS credit counters for prompts/UI and prepares `BIOS_CREDIT_DEC1..4` for accepted starts. It does not directly decrement the BIOS credit counters.
+`credits.c` only reads credit counters for UI and writes `BIOS_CREDIT_DEC1..4`. It never decrements backup-RAM credit counters directly.
 
-The public helpers in `include/system/credits.h` expose credit sharing, player credit values and the standard INSERT COIN / PRESS START prompt selection.
+`unsigned_neo_geo_set_game_start_compulsion(bool enabled)` is the explicit exception for cabinet configuration. On MVS it unlocks BIOS backup RAM, writes the persistent GAME START COMPULSION setting, then locks backup RAM again. `false` selects `WITHOUT`; `true` enables forced-start behavior. It is a no-op on AES. Because this changes a cabinet-wide persistent BIOS setting, games should only call it deliberately.
 
-## MVS cabinet settings
+The matching cabinet helpers are:
 
-`src/system/settings.c` models the cabinet settings currently needed by Unsigned.
+- `unsigned_neo_geo_game_start_compulsion_enabled()` reads the current forced-start setting.
+- `unsigned_neo_geo_game_start_compulsion_seconds()` exposes the BIOS BCD timer as normal seconds.
+- `unsigned_neo_geo_set_game_start_compulsion_seconds()` stores a 0..99 second value as BIOS BCD.
+- `unsigned_neo_geo_demo_sound_enabled()` reports the cabinet-level demo-sound mute (`true` on AES).
 
-`unsigned_neo_geo_set_game_start_compulsion(bool enabled)` updates the persistent MVS GAME START COMPULSION setting in BIOS backup RAM. AES is left unchanged.
+The demo-sound helper does not replace game-specific soft DIP logic. All setters above change persistent cabinet BIOS backup RAM and should therefore be used deliberately.
 
-Related helpers are:
+## Sound commands
 
-- `unsigned_neo_geo_game_start_compulsion_enabled()`;
-- `unsigned_neo_geo_game_start_compulsion_seconds()`;
-- `unsigned_neo_geo_set_game_start_compulsion_seconds()`;
-- `unsigned_neo_geo_demo_sound_enabled()`.
+The sound driver reserves commands `0..3`:
 
-The compulsion delay is exposed as normal seconds while the BIOS value is stored as BCD. Setter values above 99 seconds are clamped to 99. These APIs change cabinet-wide persistent BIOS settings, so application code should treat them as configuration operations rather than per-session gameplay state.
-
-## Sound-command boundary
-
-The Neo Geo BIOS reserves sound commands `0..3`:
-
-| Command | Meaning in nullsound |
+| Command | Use |
 | --- | --- |
 | 0 | unused/no command |
-| 1 | prepare for ROM switch and wait in Z80 RAM |
-| 2 | reset driver and start eye-catcher music supplied by the game ROM |
-| 3 | initialize/reset the sound driver |
-| 4+ | game-defined commands |
+| 1 | ROM switch preparation |
+| 2 | ngdevkit eye catcher |
+| 3 | driver/YM2610 reset |
+| 4+ | game commands |
 
-Unsigned reflects that boundary with `U_AUDIO_COMMAND_FIRST_GAME = 4` in `include/audio/audio_types.h`.
+Generic audio accepts only commands `>= U_AUDIO_COMMAND_FIRST_GAME`. Platform lifecycle code reaches reserved commands only through Neo Geo backend helpers such as `neo_geo_audio_reset()`.
 
-The 68k `REG_SOUND` register is a one-byte latch, not a queue. `src/system/audio_backend.c` therefore owns the hardware write and serializes normal game commands through a small transport queue. `neo_geo_audio_transport_tick()` sends at most one queued command after a completed VBlank.
+The 68k `REG_SOUND` register is a one-byte latch, so Unsigned does not let gameplay write it directly. Normal audio commands enter the Neo Geo transport queue and at most one is written immediately after each completed VBlank. A `COIN_SOUND` that cannot trigger a BIOS ROM handoff is still sent immediately and reserves the next normal transport slot. The nullsound driver already copies accepted game commands into its own Z80-side FIFO.
 
-A regular BIOS `COIN_SOUND` is written immediately and reserves the following normal transport slot. This gives the Z80 NMI path a full transport boundary before another game command may replace the latch value.
+MVS GAME START COMPULSION is different. SNK's forced-start lifecycle requests USER 3/Title, and the board can temporarily select the board FIX/SM1 ROMs. nullsound command 1 is specifically designed for that ROM switch: it stops sound, resets YM2610 and waits in Z80 RAM. The same hardware selection also changes the FIX source, which is why MAME can show a brief visual flash at exactly the point where an eagerly played first-credit sample is cut.
 
-`UAudioManager` also handles backend back-pressure. If `unsigned_audio_backend_send()` cannot accept an already resolved music/SFX command, `src/audio/audio.c` stores it in `pending_backend_command` and retries it on a later audio tick.
+Unsigned therefore treats the coin as an event, not as playback that must survive the ROM switch:
 
-## GAME START COMPULSION and the first-credit audio handoff
+1. while USER 2/ATTRACT is active with GAME START COMPULSION, the callback checks BIOS transition signals (`BIOS_USER_REQUEST`, compulsion state and current credits). Only a coin that is actually leading into forced-start TITLE is deferred; partial coinage that has not produced a credit remains immediate. A deferred event increments a tiny handoff token in the cartridge backup block (`.bss.bram`), which ngdevkit does not clear during USER 3 C-runtime initialization;
+2. USER 3 starts after ngdevkit has selected `CRTFIX`/the cartridge M1 again;
+3. USER 3 sends BIOS sound command 3, as required to initialize the newly selected nullsound M1 driver;
+4. the persistent token is consumed immediately and armed as volatile transport state;
+5. on the first completed VBlank, the coin command is sent before normal TITLE/GAME audio. This frame boundary is a protocol boundary after command 3, not an arbitrary sleep/delay.
 
-MVS GAME START COMPULSION can transition from USER 2/ATTRACT into USER 3/TITLE. During that lifecycle, the board can temporarily select the board FIX/SM1 ROMs. nullsound command 1 exists specifically for this ROM switch: it stops sound, resets the YM2610 and waits from Z80 RAM until the cartridge sound ROM becomes active again. ngdevkit then restores cartridge FIX/M1 before calling `main_mvs_title()`.
+With GAME START COMPULSION set to `WITHOUT`, USER 3 is not part of this first-credit forced-start handoff, so the normal immediate `COIN_SOUND` path remains unchanged.
 
-Playing the first-credit sample immediately before this handoff can therefore start audio that command 1 intentionally cuts. Unsigned preserves the **coin event** across the USER 2 -> USER 3 C-runtime reset and replays it once the cartridge sound driver has been restarted.
+`UAudioManager` keeps one resolved command locally when the platform queue is full and retries it later, so transport back-pressure never silently drops a music transition or SFX command.
 
-### Detection in USER 2
-
-`neo_geo_bios_forced_start_handoff_pending()` only participates while all of the following are true:
-
-- the active request is USER 2 / DEMO;
-- the system is MVS;
-- `BIOS_USER_MODE` is still DEMO;
-- GAME START COMPULSION is enabled.
-
-Inside that context, the implementation treats the following as forced-start transition indicators:
-
-- `BIOS_USER_REQUEST` already requests TITLE;
-- the BIOS compulsion timer state indicates an active/completed transition window;
-- a standard P1/P2 credit is available while USER 2 is still executing.
-
-A partial coin insertion that has not produced a usable credit and has not activated those transition indicators remains on the immediate `COIN_SOUND` path.
-
-### Persistent handoff token
-
-When the forced-start handoff is detected, `neo_geo_audio_defer_coin_sound()` increments a tiny persistent token declared with ngdevkit's `_backup_ram` attribute. The structure stored by `src/system/audio_backend.c` contains:
-
-- a magic value;
-- `pending_coin_count`;
-- an inverted count used as a validity check.
-
-The `_backup_ram` attribute places the token in `.bss.bram`. ngdevkit's USER 3 C-runtime initialization clears normal `.bss`, while this cartridge backup block remains available for the short USER 2 -> USER 3 handoff.
-
-### USER 3 restart sequence
-
-The current sequence is:
-
-1. USER 2 receives the BIOS `COIN_SOUND` callback;
-2. a forced-start transition is detected and the coin event is persisted instead of played;
-3. the BIOS/ngdevkit lifecycle enters USER 3 and restores cartridge FIX/M1;
-4. `src/system/runtime.c` initializes the Neo Geo transport and sends sound command 3 through `neo_geo_audio_reset()`;
-5. `neo_geo_audio_resume_deferred_coin_sounds()` consumes the persistent token immediately and arms volatile playback state;
-6. after the first completed VBlank, `neo_geo_audio_transport_tick()` sends the deferred coin command before normal TITLE/GAME audio.
-
-The VBlank boundary is used as a protocol boundary after command 3; the implementation does not use an arbitrary sleep or busy delay.
-
-USER 2 clears stale deferred state when a fresh attract runtime starts. USER 3 consumes the token before arming playback so a later reset cannot replay the same event again.
-
-With GAME START COMPULSION disabled, this USER 2 -> USER 3 first-credit path does not apply and the normal immediate `COIN_SOUND` transport remains in use.
+Both USER 2 and USER 3 reset the sound driver after `CRTFIX`/M1 selection. USER 2 also clears stale handoff state. USER 3 then replays any coin event deferred specifically for the forced-start ROM transition.
 
 ## Internal responsibilities
 
 | File | Responsibility |
 | --- | --- |
-| `src/system/runtime.c` | BIOS USER dispatch and ATTRACT/TITLE/GAME/GAME_OVER sequencing |
-| `src/system/bios_callbacks.c` | cartridge callback implementations and runtime binding state |
-| `src/system/session.c` | `PLAYER_MOD` access, player transitions and session lifetime |
-| `src/system/credits.c` | standard P1/P2 credit routing and start decrement preparation |
-| `src/system/settings.c` | persistent MVS cabinet settings used by Unsigned |
-| `src/system/input.c` | BIOS controller snapshots to `UInputManager` |
-| `src/system/audio_backend.c` | serialized `REG_SOUND` transport, BIOS coin priority, driver reset and forced-start handoff |
-| `src/system/save_backend.c` | memory-card / backup-RAM save backend operations |
-| `src/system/*_backend.c`, `src/system/fix.c`, `src/system/video.c` | Neo Geo rendering/video hardware access |
+| `runtime.c` | BIOS USER dispatch and ATTRACT/TITLE/GAME/GAME_OVER sequencing |
+| `bios_callbacks.c` | cartridge ABI callbacks and runtime binding state |
+| `session.c` | `PLAYER_MOD` access, player transitions and session lifetime |
+| `credits.c` | start cost and standard P1/P2 MVS credit routing |
+| `input.c` | BIOS controller snapshots -> `UInputManager` |
+| `audio_backend.c` | serialized `REG_SOUND` transport, BIOS coin priority and reserved platform audio commands |
+| `save_backend.c` | memory-card / backup-RAM BIOS operations |
+| renderer backends | Neo Geo VRAM/palette/sprite hardware access |
 
-The related internal contracts are under `include/system/`, including `bios_callbacks_internal.h`, `bios_state_internal.h`, `session_internal.h`, `credits_internal.h` and `audio_backend_internal.h`.
+Internal headers follow the same boundaries: `bios_callbacks_internal.h`, `bios_state_internal.h`, `session_internal.h` and `credits_internal.h`.
 
 ## ngdevkit compatibility
 
-Unsigned relies on ngdevkit lifecycle and ABI behavior around:
+The build is pinned to ngdevkit package version `0.5` through `NGDEVKIT_REQUIRED_VERSION` in the Makefile. When changing ngdevkit version, re-check at least:
 
-- `runtime/ngdevkit-crt0.S` USER dispatch and C-runtime reinitialization;
+- `runtime/ngdevkit-crt0.S` USER dispatch;
 - `PLAYER_START` and `COIN_SOUND` wrappers;
-- `include/ngdevkit/bios-ram.h` and BIOS backup-RAM definitions;
-- `_backup_ram` / `.bss.bram` handling;
-- nullsound BIOS commands 1, 2 and 3.
+- `include/ngdevkit/bios-ram.h`;
+- the official credits-management and memory-card examples.
 
-The Unsigned repository itself currently contains `unsigned.mk` rather than the parent game's complete ngdevkit toolchain configuration, so this document does not claim a specific ngdevkit package or git revision. A release build should record the exact ngdevkit revision/toolchain used by the parent project and re-check these integration points when that dependency changes.
+Source/nightly ngdevkit builds can share the same package version; release builds should also record the exact ngdevkit git revision used by the toolchain.

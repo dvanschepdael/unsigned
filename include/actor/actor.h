@@ -22,6 +22,8 @@ typedef struct UActor {
     Vec2 position;
     /** Mutable animation/presentation state; the immutable definition is owned by content. */
     USprite sprite;
+    /** Optional non-owning sprite drawn/allocated before the actor sprite (for example a character shadow). */
+    USprite *underlay;
     /** Frame-local transformed hitbox/hurtbox state derived from the current animation frame. */
     UActorCollisionState collision;
 } UActor;

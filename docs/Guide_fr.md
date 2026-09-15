@@ -1,14 +1,14 @@
 # Débuter dans Unsigned
 
-Ce guide s'adresse à un développeur qui connaît les bases du C et découvre le moteur et/ou la Neo Geo. La lecture s'organise autour de quatre questions structurantes : **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**. Ces questions permettent de retrouver rapidement la responsabilité d'un sous-système sans mémoriser chaque fichier.
+Ce guide vise un développeur qui connaît les bases du C mais découvre le moteur et/ou la Neo Geo. L'objectif n'est pas de mémoriser chaque fichier : il faut surtout comprendre **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**.
 
 ## 1. Les cinq repères à connaître
 
 ### `UGameInstance` : la racine du moteur
 
-`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau, level renderer, level manager, viewport et audio.
+`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau, renderer, level manager, viewport et audio.
 
-`unsigned_game_instance_init()` reçoit des buffers déjà alloués via `UGameInstanceStorage`. Les capacités se dimensionnent au démarrage, ce qui maintient une utilisation mémoire déterministe pendant la partie.
+`unsigned_game_instance_init()` reçoit des buffers déjà alloués via `UGameInstanceStorage`. Une capacité insuffisante doit donc être corrigée au démarrage plutôt que masquée par une allocation dynamique en pleine partie.
 
 ### `ULevelDefinition` : le contenu déclaré
 
@@ -21,7 +21,7 @@ Ce guide s'adresse à un développeur qui connaît les bases du C et découvre l
 - résolution métier des hits ;
 - couleur de backdrop.
 
-La définition reste valide pendant toute la durée d'utilisation du niveau.
+La définition doit rester valide pendant l'utilisation du niveau.
 
 ### `ULevel` : l'état mutable
 
@@ -33,10 +33,10 @@ La définition reste valide pendant toute la durée d'utilisation du niveau.
 - collisions ;
 - background ;
 - caméra ;
-- `UGameplayRuntime` ;
+- gameplay runtime ;
 - définition active et contexte applicatif.
 
-La séparation `ULevelDefinition` / `ULevel` distingue clairement les données de contenu de l'état d'exécution.
+La séparation `ULevelDefinition` / `ULevel` évite de mélanger données de contenu et runtime.
 
 ### `UActor` / `UCharacter` : monde et combat
 
@@ -47,7 +47,9 @@ La séparation `ULevelDefinition` / `ULevel` distingue clairement les données d
 - attributes ;
 - abilities ;
 - tags ;
-- orientation.
+- orientation ;
+- hauteur de présentation au-dessus du plan de sol ;
+- ombre au sol optionnelle, dont la réduction dépend de cette hauteur.
 
 `UPlayer` et `UNpc` enveloppent ensuite un `UCharacter` avec leur logique de contrôle respective.
 
@@ -55,9 +57,9 @@ La séparation `ULevelDefinition` / `ULevel` distingue clairement les données d
 
 Les détails de BIOS, VRAM, FIX, vidéo, input plateforme, transport audio et stockage Neo Geo sont regroupés dans `engine/system/`.
 
-Le code de niveau et de personnage utilise les APIs de cette couche pour toute opération liée aux registres matériels, au BIOS ou à la VRAM.
+Le code de niveau ou de personnage ne doit pas contourner cette couche pour écrire directement dans les registres matériels.
 
-## 2. Lire rapidement l'arborescence
+## 2. Lire l'arborescence sans se perdre
 
 Commencer par cette carte :
 
@@ -69,7 +71,7 @@ engine/
   level/      cycle de vie et orchestration d'un niveau
   physics/    collision géométrique, contraintes de mouvement, trajectoires
   collision/  collision gameplay
-  display/    données de présentation, UI, viewport
+  display/    données de présentation, effets, sprites, UI, viewport
   renderer/   politique/cache de rendu
   system/     Neo Geo/BIOS/backends matériels
   audio/      logique audio
@@ -78,7 +80,7 @@ engine/
   game/       UGameInstance
 
 src/
-  game/       composition et scénario de la démo
+  game/       composition et flow de la démo
   characters/ personnages concrets
   levels/     niveaux concrets
   menu/       menus
@@ -87,7 +89,7 @@ src/
   audio/
 ```
 
-Règle simple : `engine/` contient les mécanismes réutilisables ; `src/` décrit les besoins précis du jeu et compose ces mécanismes.
+Règle simple : `engine/` doit rester réutilisable ; `src/` peut connaître les besoins précis du jeu.
 
 ## 3. Du BIOS à une frame de jeu
 
@@ -110,7 +112,7 @@ engine/system/runtime.c
         |      |      +--> viewport
         |      |      +--> audio
         |      |
-        |      +--> demo scenario / stage / menu
+        |      +--> demo flow / stage / menu
         |
         +--> demo_loop_render()
         |      +--> unsigned_game_instance_render()
@@ -120,7 +122,7 @@ engine/system/runtime.c
         +--> transport audio
 ```
 
-Le BIOS reste autoritaire sur certaines transitions système. La boucle de jeu se lit donc comme une coopération entre la boucle applicative et le cycle de vie BIOS, plutôt que comme une boucle principale entièrement autonome.
+Le BIOS reste autoritaire sur certaines transitions système. Il ne faut donc pas raisonner comme sur une boucle PC totalement autonome.
 
 ## 4. Lire une frame de niveau
 
@@ -148,7 +150,7 @@ cues
 background tick
 ```
 
-Cet ordre est un contrat comportemental. Modifier la position d'une étape peut modifier le gameplay, même lorsque le code compile toujours.
+Cet ordre est un contrat comportemental. Déplacer une étape peut changer le gameplay, même si le code compile encore.
 
 Exemple : `resolve_hits` intervient après les abilities mais avant les effects/cues de fin de frame.
 
@@ -166,7 +168,7 @@ La génération permet de distinguer l'ancienne instance de la nouvelle.
 
 ### Règle pratique
 
-Pour conserver une référence vers un slot, s'appuyer sur le contrat du sous-système et, lorsqu'il existe, sur le mécanisme `generation`. La génération identifie l'instance logique même lorsqu'une adresse mémoire est réutilisée.
+Ne conservez pas un pointeur vers un slot en supposant qu'il restera le même objet logique. Vérifiez le contrat du sous-système et, lorsqu'il existe, le mécanisme `generation`.
 
 ## 6. Où ajouter du code ?
 
@@ -178,7 +180,7 @@ Regarder d'abord :
 - `engine/gameplay/` ;
 - éventuellement `engine/physics/` ou `engine/collision/`.
 
-Une mécanique propre à un seul personnage du jeu trouve naturellement sa place sous `src/characters/`.
+Si la mécanique ne sert qu'à un personnage du jeu, la mettre plutôt sous `src/characters/`.
 
 ### Une nouvelle action du joueur
 
@@ -190,7 +192,7 @@ Une mécanique propre à un seul personnage du jeu trouve naturellement sa place
 6. prévoir la fin ou l'annulation de l'ability ;
 7. tester l'échec d'activation lorsque le pool est plein.
 
-Pour une direction continue, un seul binding `ANY` peut couvrir le D-pad ; l'ability lit ensuite `UPlayer.input_state` / `unsigned_input_direction()`. Cette organisation conserve une seule ability pour une action logique unique, y compris en diagonale.
+Pour une direction continue, préférer un seul binding `ANY` couvrant le D-pad, puis lire `UPlayer.input_state` / `unsigned_input_direction()`. Ne pas réserver une ability distincte pour chaque direction lorsque l'action logique est unique.
 
 Fichiers utiles :
 
@@ -201,7 +203,7 @@ Fichiers utiles :
 - `engine/gameplay/gameplay_pool.c` ;
 - exemples dans `src/characters/player/demo/` et `src/characters/player/arthur/`.
 
-Pour une réaction qui remplace toutes les actions courantes d'un personnage, l'API owner-level du pool (`release_owner` / `replace_owner`) centralise le remplacement et encapsule les tableaux internes de `UAbilityPool`.
+Pour une réaction qui remplace toutes les actions courantes d'un personnage, utiliser l'API owner-level du pool (`release_owner` / `replace_owner`) au lieu d'inspecter directement les tableaux internes de `UAbilityPool`.
 
 ### Déplacer un personnage et limiter sa zone
 
@@ -217,7 +219,7 @@ engine/input         engine/actor            engine/physics
 - `unsigned_character_set_facing()` gère l'orientation ;
 - `unsigned_physics_movement_constrain()` applique éventuellement un `UMovementBounds`.
 
-`UActor` stocke la position monde. Le niveau ou le gameplay choisit ensuite les `UMovementBounds` et applique la contrainte lorsque la zone jouable le demande.
+Ne pas ajouter de bounds dans `UActor` : l'acteur stocke une position, tandis que le niveau/gameplay décide si cette position doit être contrainte.
 
 ### Un nouvel attribute
 
@@ -225,7 +227,7 @@ Les attributes sont définis dans `engine/gameplay/attribute.h`.
 
 Pour un attribute propre au personnage de démonstration, regarder `src/characters/player/demo/player_health.c`.
 
-Un callback `on_change` peut servir à synchroniser une UI, comme le fait le HUD pour la vie du joueur. Pour appliquer un delta, `unsigned_gameplay_attribute_add_current_value()` fournit directement les règles de saturation, clamp et notification communes.
+Un callback `on_change` peut servir à synchroniser une UI, comme le fait le HUD pour la vie du joueur. Pour appliquer un delta, préférer `unsigned_gameplay_attribute_add_current_value()` plutôt qu'un clamp recodé localement.
 
 ### Un nouveau NPC
 
@@ -235,7 +237,7 @@ Un callback `on_change` peut servir à synchroniser une UI, comme le fait le HUD
 4. appeler `unsigned_npc_init()` ;
 5. laisser `level_ai.c` et TLSS gérer sa cadence selon son activité.
 
-`UStateGraph` porte l'état logique du graph. Lorsqu'un propriétaire utilise des transitions `U_TRANSITION_ON_TIMEOUT`, il possède explicitement un `UStateGraphClock` et appelle `unsigned_state_graph_clock_tick()`. Le compteur temporel reste ainsi dans le composant temporel dédié.
+`UStateGraph` ne contient pas de temps écoulé. Si un propriétaire a besoin de transitions `U_TRANSITION_ON_TIMEOUT`, il doit posséder explicitement un `UStateGraphClock` et utiliser `unsigned_state_graph_clock_tick()`. Ne pas réintroduire un compteur temporel dans la structure de graph générique.
 
 Fichiers utiles :
 
@@ -250,21 +252,22 @@ Le contenu concret va dans `src/levels/<nom_du_niveau>/`.
 
 1. déclarer un `ULevelDefinition` ;
 2. définir les backgrounds et spawns avec une durée de vie suffisante ;
-3. utiliser `load` pour le setup impératif complémentaire aux données ;
+3. utiliser `load` pour le setup qui ne peut pas être exprimé par les données ;
 4. utiliser `enter` / `exit` pour le changement d'état autour du niveau actif ;
 5. utiliser `unload` pour annuler le travail de `load` ;
-6. exposer la définition à `src/game/demo_scenes.c` ou au scénario concerné.
+6. exposer la définition à `src/game/demo_scenes.c` ou au flow concerné.
 
 Le chargement est transactionnel : une erreur déclenche le rollback du contenu déjà installé.
 
-## 7. Display, renderer et system : trois responsabilités complémentaires
+## 7. Display, renderer et system : ne pas les confondre
 
-Cette séparation est essentielle dans la structure actuelle. `engine/renderer` désigne le sous-système qui porte la politique de rendu ; les types comme `UUIRenderer` et `UNeoGeoUIRenderer` sont les objets et adaptateurs utilisés dans cette chaîne de rendu.
+Cette séparation est essentielle dans la structure actuelle.
 
 ### `engine/display`
 
 Décrit des concepts indépendants du backend :
 
+- effets génériques (`UEffect`) ;
 - sprites ;
 - texte ;
 - viewport ;
@@ -319,6 +322,31 @@ UUIProgressBar
     -> FIX layer
 ```
 
+### Appliquer un effet à n'importe quel `USprite`
+
+Les effets de présentation sont dans `engine/display/effect/` et utilisent la même abstraction `UEffect` que le viewport. Inclure `display/effect/effect.h` pour le mécanisme générique, puis uniquement le header de l’effet utilisé (`transform.h`, `zoom.h`, `turn.h`, `wave.h`, `bob.h`, `shake.h`, `shear.h` ou `blink.h`). Un sprite possède directement `sprite.effect`; l'effet continue à avancer même si son animation est arrêtée.
+
+Exemple de zoom pulsé centré :
+
+```c
+static const UZoomEffect pulse = {
+    .min_scale_x = 160u,
+    .min_scale_y = 160u,
+    .max_scale_x = U_EFFECT_SCALE_ONE,
+    .max_scale_y = U_EFFECT_SCALE_ONE,
+    .pivot_x = U_EFFECT_PIVOT_CENTER,
+    .pivot_y = U_EFFECT_PIVOT_CENTER,
+};
+
+unsigned_effect_set_zoom(&actor.sprite.effect, &pulse, 2u);
+```
+
+`UEffect` ne copie pas `pulse` : la configuration doit donc rester valide tant que l'effet est actif. Une configuration `static const` convient aux presets immuables ; pour une valeur animée par le gameplay, stocker la configuration dans l'objet runtime qui la pilote. `unsigned_effect_clear()` détache l'effet.
+
+Pour une transformation pilotée par le gameplay, utiliser `UTransformEffect` puis modifier son offset, son scale, ses flips ou sa visibilité sans toucher au renderer. `UCharacterShadow` suit exactement ce modèle : il traduit la hauteur du personnage en scale et laisse `sprite_renderer` + `sprite_backend` faire le reste.
+
+Presets disponibles : `transform`, `zoom`, `turn`, `shake`, `bob`, `blink`, `shear`, `wave`. Pour un effet spécifique au jeu, `unsigned_effect_set_advanced()` permet de fournir un callback uniforme ou par colonne tout en réutilisant le même pipeline. Les effets de sprite sont purement visuels : ils ne déplacent pas `actor.position` et ne transforment pas les hitboxes/hurtboxes. `turn` est une rotation 3D simulée par réduction + flip. Le matériel Neo Geo ne fournit ni rotation libre ni agrandissement au-delà de 100 % ; pour ces cas, utiliser des graphismes pré-rendus.
+
 ## 8. Ajouter ou modifier une UI
 
 L'UI générique est sous `engine/display/ui/`.
@@ -340,35 +368,37 @@ Pour une interface de jeu concrète, utiliser `src/menu/` ou `src/hud/`.
 `src/hud/demo_hud.c` :
 
 1. crée une `UUIProgressBar` ;
-2. la lie à un `UGameplayAttribute` de vie ;
-3. branche `on_change` sur l'attribute et ses bornes ;
-4. appelle `unsigned_ui_progress_bar_sync()` quand la valeur change ;
+2. la lie à un `UGameplayAttribute` de vie non possédé ;
+3. compare Health, MinHealth et MaxHealth à son cache pendant le rendu ;
+4. appelle `unsigned_ui_progress_bar_sync()` uniquement lorsqu'une valeur affichée a changé ;
 5. rend le `UUIScreen` via `UUIRenderer` + `UNeoGeoUIRenderer`.
 
-Le widget stocke une progression normalisée 0..256. Le renderer réutilise directement cette valeur normalisée à chaque frame. Le HUD actuel possède volontairement les slots `on_change` pendant le binding ; cette politique reste dans `src/hud/`.
+Le HUD ne remplace pas `UGameplayAttribute.on_change`. Le propriétaire du personnage reste donc responsable de ses callbacks métier. L'attribute lié et ses bornes doivent rester vivants tant que le HUD est visible.
 
-Pour les menus, `unsigned_ui_input_from_controller()` convertit le snapshot contrôleur en `UUIInput` standard et centralise le mapping direction/A/B pour l'ensemble des écrans.
+Pour les menus, utiliser `unsigned_ui_input_from_controller()` pour convertir le snapshot contrôleur en `UUIInput` standard au lieu de dupliquer le mapping direction/A/B dans chaque écran.
 
-## 9. Collisions : deux couches complémentaires
+## 9. Collisions : deux couches à distinguer
 
-`engine/physics` manipule les boîtes, les couches de collision et les primitives géométriques. La notion d'attaque apparaît dans `engine/collision`, qui ajoute :
+`engine/physics` connaît des boîtes et des couches de collision. Il ne sait pas ce qu'est une attaque.
+
+`engine/collision` ajoute :
 
 - hitbox/hurtbox ;
 - acteurs ;
 - projectile ;
 - hit detection.
 
-`engine/level/level_collision.c` orchestre ensuite l'ensemble pour le niveau actif.
+`engine/level/level_collision.c` orchestre ensuite tout cela pour le niveau actif.
 
 Les collisions statiques sont construites au chargement. Les collisions dynamiques sont effacées puis enregistrées à nouveau chaque frame.
 
-Le callback `ULevelDefinition.resolve_hits` parcourt les couples déjà détectés via `unsigned_level_collision_hits()`, puis applique les règles de jeu : dégâts, garde, réactions et déduplication. L'intersection géométrique reste la responsabilité du pipeline collision.
+Le callback `ULevelDefinition.resolve_hits` doit lire les couples déjà détectés via `unsigned_level_collision_hits()`. Il applique ensuite les règles de jeu (dégâts, garde, réactions, déduplication), mais ne recalcule pas lui-même les intersections hitbox/hurtbox.
 
 Si les buffers de registration sont saturés, la frame de collision est invalidée plutôt que partiellement calculée.
 
-## 10. State graph : séparer logique et temps
+## 10. State graph : ajouter du temps sans polluer le graph
 
-`UStateGraph` possède l'état logique courant. `UStateGraphNode.duration_frames` est une donnée de définition ; `UStateGraphClock` porte l'état temporel optionnel.
+`UStateGraph` possède l'état logique courant, pas un compteur de frames. `UStateGraphNode.duration_frames` est une donnée de définition ; `UStateGraphClock` est le runtime temporel optionnel.
 
 Le pattern est :
 
@@ -380,7 +410,7 @@ chaque frame nécessitant les timeouts :
     unsigned_state_graph_clock_tick(&clock, &graph)
 ```
 
-Sans timeout, `unsigned_state_graph_tick()` suffit et le propriétaire peut fonctionner sans clock. `ULevelManager` illustre les deux modes : graph-driven avec clock, ou contrôle direct sans graph.
+Si aucun timeout n'est nécessaire, appeler simplement `unsigned_state_graph_tick()` et ne pas stocker de clock. `ULevelManager` illustre les deux modes : graph-driven avec clock, ou contrôle direct sans graph.
 
 ## 11. TLSS : simulation temporellement réduite
 
@@ -391,11 +421,11 @@ Il peut étaler le travail sur 1/2/4/8/16 frames. Deux usages sont actuellement 
 - AI ;
 - collision.
 
-Les NPC hors écran ou dormants peuvent donc coûter moins cher tout en conservant le framerate global.
+Les NPC hors écran ou dormants peuvent donc coûter moins cher sans réduire le framerate global.
 
-La collision dispose d'un mécanisme de résolution immédiate pour une hitbox qui vient de devenir active. Ce mécanisme préserve son premier instant d'attaque même avec une cadence TLSS réduite.
+Important : la collision dispose d'un mécanisme de résolution immédiate pour une hitbox qui vient de devenir active, afin qu'une cadence TLSS réduite ne fasse pas perdre son premier instant d'attaque.
 
-## 12. Neo Geo : responsabilités du BIOS et du runtime système
+## 12. Neo Geo : ce qu'il ne faut pas simuler soi-même
 
 Sur MVS/AES, le BIOS possède une partie du cycle de vie.
 
@@ -409,9 +439,9 @@ Le runtime système gère notamment :
 - GAME START COMPULSION ;
 - handoff audio associé.
 
-Pour modifier ce domaine, commencer par `engine/system/BIOS_WORKFLOW.md`, puis consulter les fichiers publics concernés dans `engine/system/`.
+Avant de modifier ce domaine, lire `docs/Bios_fr.md` puis les fichiers publics concernés dans `engine/system/`.
 
-Une pression sur START issue de l'input générique devient une demande applicative ; l'acceptation effective d'un joueur MVS reste pilotée par le `PLAYER_START` du BIOS, qui constitue la source autoritaire.
+Ne transformez pas simplement un bouton START lu dans l'input générique en décision de démarrer une session MVS : `PLAYER_START` BIOS reste la source autoritaire.
 
 ## 13. Lire le projet de démonstration
 
@@ -426,9 +456,9 @@ Pour comprendre comment toutes les couches sont assemblées, suivre cet ordre :
 7. le joueur sous `src/characters/player/demo/` ;
 8. `src/hud/demo_hud.c` et `src/menu/main/demo_menu.c`.
 
-Cette lecture montre la frontière entre le moteur réutilisable et le contenu du jeu plus clairement qu'une lecture fichier par fichier de tout `engine/`.
+Cette lecture montre la frontière entre le moteur réutilisable et le contenu du jeu mieux qu'une lecture fichier par fichier de tout `engine/`.
 
-Dans `demo_flow.c`, les transitions de scène sont décrites par une table de règles. Le `UTimerPool` reste responsable des durées/countdowns de présentation. `demo_flow.c` orchestre le scénario concret de la démo, tandis que `UStateGraphClock` chronomètre un `UStateGraph` générique : les deux composants répondent à des responsabilités distinctes.
+Dans `demo_flow.c`, les transitions de scène sont décrites par une table de règles. Le `UTimerPool` reste responsable des durées/countdowns de présentation. Ne pas confondre ce flow applicatif avec `UStateGraphClock`, qui ne sert qu'à chronométrer un `UStateGraph` générique.
 
 ## 14. Méthode de modification recommandée
 
@@ -442,4 +472,4 @@ Pour une contribution :
 6. ajouter ou adapter un test hôte ;
 7. vérifier ensuite MAME/hardware si le changement dépend de la Neo Geo.
 
-Quand un commentaire est nécessaire, documenter l'invariant, la durée de vie, la raison de performance ou la contrainte BIOS. Privilégier l'information qui complète le code : intention, contrat ou justification technique.
+Quand un commentaire est nécessaire, documenter l'invariant, la durée de vie, la raison de performance ou la contrainte BIOS. Éviter de paraphraser le code.

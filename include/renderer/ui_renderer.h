@@ -15,7 +15,7 @@
 #define U_NEO_GEO_UI_PROGRESS_VARIANTS 9u
 #define U_NEO_GEO_UI_PROGRESS_TILE_COUNT 54u
 #define U_NEO_GEO_UI_PROGRESS_INSET_LEFT 1u
-#define U_NEO_GEO_UI_PROGRESS_INSET_RIGHT 0u
+#define U_NEO_GEO_UI_PROGRESS_INSET_RIGHT 1u
 
 /**
  * @brief Neo Geo FIX-renderer configuration.

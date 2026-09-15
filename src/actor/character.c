@@ -7,6 +7,44 @@
 
 #include "core/math/math.h"
 
+bool unsigned_character_set_shadow(UCharacter *character, const UCharacterShadowDefinition *definition, u16 first_sprite) {
+    if (character == NULL || definition == NULL) {
+        return false;
+    }
+
+    if (!unsigned_character_shadow_init(&character->shadow, definition, first_sprite)) {
+        return false;
+    }
+
+    character->actor.underlay = &character->shadow.sprite;
+    unsigned_character_shadow_set_height(&character->shadow, character->height);
+    return true;
+}
+
+void unsigned_character_set_height(UCharacter *character, s16 height) {
+    if (character == NULL) {
+        return;
+    }
+
+    const s16 clamped_height = height > 0 ? height : 0;
+    if (character->height == clamped_height) {
+        return;
+    }
+
+    /* Height is presentation-only: preserve actor.position as the ground/depth origin. */
+    if (character->height == 0 && clamped_height > 0) {
+        character->ground_sprite_offset_y = character->actor.sprite.offset.y;
+    }
+
+    if (clamped_height == 0) {
+        character->actor.sprite.offset.y = character->ground_sprite_offset_y;
+    } else {
+        character->actor.sprite.offset.y = unsigned_math_saturate_s16((s32)character->ground_sprite_offset_y - clamped_height);
+    }
+    character->height = clamped_height;
+    unsigned_character_shadow_set_height(&character->shadow, clamped_height);
+}
+
 void unsigned_character_set_facing(UCharacter *character, s16 horizontal_direction) {
     if (character == NULL || horizontal_direction == 0) {
         return;
@@ -31,6 +69,9 @@ void unsigned_character_tick(UCharacter *character) {
         return;
     }
 
+    if (character->shadow.sprite.definition != NULL) {
+        unsigned_sprite_tick(&character->shadow.sprite, character);
+    }
     unsigned_actor_tick(&character->actor);
 }
 

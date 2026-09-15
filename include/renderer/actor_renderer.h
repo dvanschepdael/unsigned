@@ -9,7 +9,7 @@
 #include "actor/actor.h"
 #include "display/viewport/viewport.h"
 
-/** Return true when an active actor with a frame is visible in the viewport. */
+/** Return true when an active actor sprite or its optional underlay is visible in the viewport. */
 bool unsigned_actor_renderer_is_visible(const UActor *actor, const UViewport *viewport);
 
 /**
@@ -27,7 +27,13 @@ bool unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_
 /** Cull and draw one actor. */
 void unsigned_actor_renderer_draw(UActor *actor, const UViewport *viewport);
 
-/** Draw one actor using its already-prepared layout visibility. */
+/** Draw only an actor's prepared underlay; used by level rendering to emit all shadows first. */
+void unsigned_actor_renderer_draw_underlay_prepared(UActor *actor, const UViewport *viewport);
+
+/** Draw only an actor's prepared body sprite. */
+void unsigned_actor_renderer_draw_body_prepared(UActor *actor, const UViewport *viewport);
+
+/** Draw one actor using its already-prepared layout visibility; the optional underlay is emitted first. */
 void unsigned_actor_renderer_draw_prepared(UActor *actor, const UViewport *viewport);
 
 /** Hide one actor without releasing its allocation. */

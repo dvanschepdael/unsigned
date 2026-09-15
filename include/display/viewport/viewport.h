@@ -7,7 +7,7 @@
 #define UNSIGNED_DISPLAY_VIEWPORT_H
 
 #include "display/camera/camera.h"
-#include "display/viewport/effect.h"
+#include "display/effect/effect.h"
 
 typedef struct UViewport {
     s16 x;

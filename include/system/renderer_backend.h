@@ -20,7 +20,7 @@ void unsigned_renderer_backend_begin(void);
 void unsigned_renderer_backend_end(void);
 
 /** Encode Neo Geo SCB2 shrink values for a sprite plus an optional viewport zoom effect. */
-u16 unsigned_sprite_backend_encode_scb2(const USpriteRenderState *render, s16 zoom_offset);
+u16 unsigned_sprite_backend_encode_scb2(const USpriteRenderState *render, const UEffectSample *effect);
 
 /** Flush sprite tile/attribute data selected by U_SPRITE_RENDER_DIRTY_GRAPHICS bits. */
 void unsigned_sprite_backend_flush_graphics(const USprite *sprite, const UFrame *frame, u8 dirty);
@@ -29,7 +29,7 @@ void unsigned_sprite_backend_flush_graphics(const USprite *sprite, const UFrame 
 void unsigned_sprite_backend_flush_chained_transform(const USprite *sprite, s16 screen_x, s16 screen_y, u16 scb2, u8 dirty);
 
 /** Write per-column position/zoom values used by non-uniform viewport effects. */
-void unsigned_sprite_backend_write_effect_positions(const USprite *sprite, const UViewport *viewport, s16 screen_x, s16 screen_y);
+void unsigned_sprite_backend_write_effect_positions(const USprite *sprite, const UEffect *viewport_effect, const UEffect *sprite_effect, s16 screen_x, s16 screen_y);
 
 /** Clear SCB3 for a contiguous sprite range, making every sprite in the range invisible. */
 void unsigned_sprite_backend_clear_range(u16 first_sprite, u16 sprite_count);

@@ -117,6 +117,19 @@ void unsigned_sprite_set_flip_x(USprite *sprite, bool flip_x) {
     }
 }
 
+void unsigned_sprite_set_flip_y(USprite *sprite, bool flip_y) {
+    const u8 value = flip_y ? 1u : 0u;
+
+    if (sprite == NULL) {
+        return;
+    }
+
+    if (sprite->flip_y != value) {
+        sprite->flip_y = value;
+        unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_GRAPHICS);
+    }
+}
+
 void unsigned_sprite_set_palette(USprite *sprite, u8 palette) {
     if (sprite == NULL) {
         return;
@@ -150,7 +163,14 @@ void unsigned_sprite_invalidate_render_state(USprite *sprite) {
 }
 
 void unsigned_sprite_tick(USprite *sprite, void *context) {
-    if (sprite == NULL || sprite->state != U_SPRITE_PLAYING) {
+    if (sprite == NULL) {
+        return;
+    }
+
+    /* Presentation effects advance independently from animation playback. */
+    unsigned_effect_tick(&sprite->effect);
+
+    if (sprite->state != U_SPRITE_PLAYING) {
         return;
     }
 

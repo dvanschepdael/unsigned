@@ -7,7 +7,7 @@
 #define UNSIGNED_LEVEL_BACKGROUND_H
 
 #include "core/types.h"
-#include "display/sprite/attributes.h"
+#include "display/sprite/config.h"
 #include "level/background/config.h"
 
 #define U_BACKGROUND_PARALLAX_FRACTION_BITS 3

@@ -7,7 +7,8 @@
 #define UNSIGNED_DISPLAY_SPRITE_H
 
 #include "core/types.h"
-#include "display/sprite/attributes.h"
+#include "display/effect/effect.h"
+#include "display/sprite/config.h"
 #include "display/sprite/render_state.h"
 #include "physics/collision.h"
 
@@ -44,10 +45,22 @@ typedef struct UAnimationContainer {
 typedef struct USpriteDefinition {
     const UAnimationContainer *animations;
     u16 first_tile;
+    /**
+     * Optional fully transparent tile used to guard unused SCB1 rows.
+     *
+     * Neo Geo vertical shrinking samples tile-map rows beyond the visible
+     * height because SCB3 defines a fixed display window. When
+     * `clear_unused_rows` is enabled, the backend fills every unused row with
+     * this tile whenever the sprite hardware layout is rebuilt. This prevents
+     * stale tile-map data from becoming visible while shrink_y is below 0xff.
+     */
+    u16 transparent_tile;
     u8 width_tiles;
     u8 height_tiles;
     u8 palette;
     u8 auto_animation;
+    /** Whether unused SCB1 tile-map rows must be initialized with `transparent_tile`. */
+    bool clear_unused_rows;
 } USpriteDefinition;
 
 typedef enum UAnimationPlayback {
@@ -66,11 +79,14 @@ typedef struct USprite {
     const UAnimation *current_animation;
     const UFrame *current_frame;
     USpriteRenderState render;
+    /** Optional presentation effect sampled by the sprite renderer and advanced by unsigned_sprite_tick(). */
+    UEffect effect;
     Vec2 offset;
     u8 animation_index;
     u8 frame_index;
     u8 frame_ticks;
     u8 flip_x;
+    u8 flip_y;
     u8 palette;
     UAnimationPlayback playback;
     UAnimationState state;
@@ -100,9 +116,12 @@ bool unsigned_sprite_play(USprite *sprite, u8 animation_index, UAnimationPlaybac
  * @brief Changes horizontal mirroring and dirties graphics only when the value actually changes.
  *
  * @param sprite Logical sprite whose animation/render state is processed.
- * @param flip_x Whether the sprite is horizontally mirrored around its origin.
+ * @param flip_x Whether the sprite is horizontally mirrored. Actor collision follows this base facing flip; effect-only flips remain presentation-only.
  */
 void unsigned_sprite_set_flip_x(USprite *sprite, bool flip_x);
+
+/** Changes vertical presentation mirroring. Sprite effects may also toggle it temporarily; collision is unchanged. */
+void unsigned_sprite_set_flip_y(USprite *sprite, bool flip_y);
 
 /**
  * @brief Changes the sprite palette and dirties only palette state when necessary.

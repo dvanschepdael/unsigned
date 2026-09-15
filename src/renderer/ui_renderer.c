@@ -73,7 +73,7 @@ static void neo_geo_ui_draw_progress_bar(void *context, const UUITheme *theme, c
         return;
     }
 
-    /* Fill starts at x=1 and includes the final column (x=23 in the source bar). */
+    /* Fill is restricted to the framed interior: x=1..width-2. */
     const u16 interior_width = (u16)(columns * U_UI_PROGRESS_BAR_TILE_SIZE - U_NEO_GEO_UI_PROGRESS_INSET_LEFT - U_NEO_GEO_UI_PROGRESS_INSET_RIGHT);
     u16 progress = unsigned_ui_progress_bar_progress(progress_bar);
     if (progress > U_UI_PROGRESS_BAR_PROGRESS_ONE) {

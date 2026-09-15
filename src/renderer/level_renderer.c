@@ -179,8 +179,12 @@ void unsigned_level_renderer_render(ULevelRenderer *renderer, ULevel *level, con
     unsigned_background_renderer_draw(&renderer->background, &level->background, viewport);
 
     if (renderer->actor_layout_complete) {
+        /* Ground underlays are emitted as one complete pass before any actor body. */
         for (u8 i = 0u; i < level->actors.count; ++i) {
-            unsigned_actor_renderer_draw_prepared(level->actors.instances[i], viewport);
+            unsigned_actor_renderer_draw_underlay_prepared(level->actors.instances[i], viewport);
+        }
+        for (u8 i = 0u; i < level->actors.count; ++i) {
+            unsigned_actor_renderer_draw_body_prepared(level->actors.instances[i], viewport);
         }
     }
 

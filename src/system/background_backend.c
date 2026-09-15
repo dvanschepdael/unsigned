@@ -3,7 +3,7 @@
  * @brief Translates scrolling background operations into Neo Geo SCB/VRAM writes.
  */
 
-#include "display/sprite/attributes.h"
+#include "display/sprite/config.h"
 #include "system/renderer_backend.h"
 #include "system/video.h"
 #include "system/vram_writer_internal.h"

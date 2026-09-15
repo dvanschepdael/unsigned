@@ -1,6 +1,6 @@
 # Unsigned Technical Architecture
 
-This document describes the **current** organization of the engine and the demo project. The core principle is to separate game rules and simulation from Neo Geo-specific details so that most of the engine can be tested on the host.
+This document describes the **current** organization of the engine and the demo project. The core principle is to keep game rules and simulation separate from Neo Geo-specific details so that most of the engine can be tested on the host.
 
 ## 1. Dependency direction
 
@@ -33,14 +33,14 @@ core = types and generic building blocks shared by engine layers
 save = generic persistent storage + platform backend
 ```
 
-Dependencies are not all strictly vertical, but this direction defines the organization rule:
+Dependencies are not all strictly vertical, but this direction defines the rule to preserve:
 
 - `src` describes the game and composes the engine;
 - `engine/display` describes what must be presented;
 - `engine/renderer` decides how to transform that state into rendering operations;
 - `engine/system` performs Neo Geo- and BIOS-specific operations.
 
-Gameplay code accesses VRAM and BIOS services through engine APIs, keeping hardware-specific details within `engine/system`.
+Gameplay code must therefore not write directly to VRAM or read BIOS RAM to bypass engine APIs.
 
 ## 2. Current directory structure
 
@@ -52,7 +52,7 @@ engine/
 ├── audio/       events, music, resolution and logical audio commands
 ├── collision/   actor index, hit detection, projectiles, gameplay collision
 ├── core/        types, math, pools, state graph, timers, TLSS
-├── display/     camera, sprites, text, UI and viewport
+├── display/     camera, presentation effects, sprites, text, UI and viewport
 ├── game/        UGameInstance composition root
 ├── gameplay/    attributes, tags, abilities, effects, cues and runtime
 ├── input/       generic input state
@@ -75,6 +75,7 @@ engine/core/
 
 engine/display/
 ├── camera/
+├── effect/      generic effects shared by viewports and sprites
 ├── sprite/
 ├── text/
 ├── ui/
@@ -131,9 +132,9 @@ src/
 7. initialize the viewport;
 8. start level flow, either through `ULevelGraph` or a direct `initial_level`.
 
-Variable-capacity memory is provided by the application through `UGameInstanceStorage`. These arrays remain owned by the application for their full lifetime in the engine.
+Variable-capacity memory is provided by the application through `UGameInstanceStorage`. The engine does not own these arrays and does not free them.
 
-On failure, `unsigned_game_instance_destroy()` returns the instance to an empty state while leaving buffers with their original owner.
+On failure, `unsigned_game_instance_destroy()` returns the instance to an empty state while leaving buffers owned by their original owner.
 
 ## 4. One-frame loop
 
@@ -163,7 +164,7 @@ ng_wait_vblank()
 audio transport
 ```
 
-The loop combines the application cycle with the BIOS lifecycle: the BIOS remains responsible for part of the system transitions.
+The loop is therefore not a simple `while (1)` fully owned by the game: the BIOS remains responsible for part of the lifecycle.
 
 ### Application layer
 
@@ -239,7 +240,7 @@ The actual order in `engine/level/level.c` is:
 
 The engine detects interactions; the level definition decides their gameplay meaning through `resolve_hits`.
 
-`resolve_hits` iterates over results already produced by the engine through `unsigned_level_collision_hits()`. The collision pipeline owns geometry and hitbox/hurtbox intersection; gameplay then applies damage, guard, knockdown and combo rules.
+`resolve_hits` must consume results already produced by the engine through `unsigned_level_collision_hits()`. Gameplay code must not rebuild hitboxes/hurtboxes in world space to perform a second detection pass: geometry belongs to the collision pipeline, while damage, guard, knockdown and combo rules belong to the game.
 
 ## 6. Actors, characters and pools
 
@@ -258,6 +259,7 @@ UActor
            abilities
            tags
            facing
+           height + character shadow
              |
              +--> UPlayer
              |      input + ability bindings
@@ -270,7 +272,7 @@ UProjectile -> references a UActor + trajectory/lifetime
 
 `UActorContainer` is a non-owning view over active actors gathered from specialized pools.
 
-`UActor` stores world presence, including world position. `UCharacter` provides generic movement/orientation operations, while spatial constraint policy belongs to level or gameplay code.
+`UActor` intentionally has no concept of playable area or bounds. It stores a world position; `UCharacter` provides generic movement/orientation operations, but the decision to constrain that movement remains external to the actor. `UCharacter.height` is presentation elevation: `actor.position` stays on the ground plane for movement and depth ordering, while the body sprite is shifted vertically and `UCharacterShadow` shrinks the ground shadow. The renderer does not know this rule; it still handles the shadow as a generic `underlay`.
 
 ### Movement and spatial constraints
 
@@ -299,9 +301,9 @@ Vec2 world position
 - `UMovementBounds` and `unsigned_physics_movement_constrain()` live in `engine/physics/movement.h` / `engine/physics/movement.c`;
 - the owner of the movement explicitly decides whether these bounds apply. A projectile or NPC can therefore remain free to leave the playable area.
 
-This separation assigns world position to `UActor` and spatial policy to level/gameplay code.
+This separation prevents `UActor` from owning level policy.
 
-Pools use fixed slots. `UPoolInstance.generation` detects reuse of the same slot: an identical address may refer to a new logical instance.
+Pools use fixed slots. `UPoolInstance.generation` detects reuse of the same slot: an identical address does not necessarily mean that it is still the same logical instance.
 
 ## 7. Gameplay: attributes, abilities, effects, cues and tags
 
@@ -322,7 +324,7 @@ The main concepts are:
 - **Cue**: timed gameplay event;
 - **Tag**: reference-counted identifier used to grant or block states.
 
-Gameplay callbacks may release or reuse a slot during their own execution. Generation and identity checks in pools stop processing the previous instance and protect the newly allocated one.
+Gameplay callbacks may release or reuse a slot during their own execution. Generation and identity checks in pools then prevent work from continuing on an instance that has become stale.
 
 ### Input to abilities
 
@@ -331,28 +333,28 @@ Gameplay callbacks may release or reuse a slot during their own execution. Gener
 - `U_INPUT_MATCH_ALL`: every button in the mask must match;
 - `U_INPUT_MATCH_ANY`: at least one button in the mask is enough.
 
-The demo movement therefore uses a single `ANY` binding covering the entire D-pad. A diagonal consequently creates one movement ability.
+The demo movement therefore uses a single `ANY` binding covering the entire D-pad. A diagonal consequently creates one movement ability instead of one ability per direction.
 
 `UPlayer.input_state` exposes the current snapshot to abilities that need continuous control, such as Arthur's jump.
 
 ### Owner-level interruption/replacement
 
-`UAbilityPool` provides owner-level operations that encapsulate the pool's internal arrays:
+`UAbilityPool` provides owner-level operations so a character does not inspect the pool's internal arrays:
 
 - `unsigned_gameplay_ability_pool_release_owner()`;
 - `unsigned_gameplay_ability_pool_replace_owner()`.
 
-Replacement pre-validates pool capacity and tag capacity for the prospective state before removing existing abilities. Reactions such as Hurt/Knockdown/Caught can therefore interrupt a character while keeping the pool's internal representation encapsulated.
+Replacement pre-validates pool capacity and tag capacity for the prospective state before removing existing abilities. Reactions such as Hurt/Knockdown/Caught can therefore interrupt a character without coupling character code to the pool's internal representation.
 
 ### Attributes
 
-`unsigned_gameplay_attribute_set_current_value()` applies bounds and notifies `on_change` when the final value actually changes. `unsigned_gameplay_attribute_add_current_value()` adds a signed delta with `s16` saturation, then reuses the same clamp/notification rules.
+`unsigned_gameplay_attribute_set_current_value()` applies bounds and only notifies `on_change` when the final value actually changes. `unsigned_gameplay_attribute_add_current_value()` adds a signed delta with `s16` saturation, then reuses the same clamp/notification rules.
 
 ## 8. State graph: logic and time separated
 
-`UStateGraph` (`engine/core/state/state_graph.h` / `engine/core/state/state_graph.c`) contains logical execution state: context, global/initial/current nodes, tasks and transitions. Elapsed time is carried by the optional `UStateGraphClock` component (`engine/core/state/state_graph_clock.h` / `engine/core/state/state_graph_clock.c`).
+`UStateGraph` (`engine/core/state/state_graph.h` / `engine/core/state/state_graph.c`) contains only logical execution state: context, global/initial/current nodes, tasks and transitions. It owns no time counter.
 
-Nodes may declare `duration_frames`:
+Nodes may declare `duration_frames`, but elapsed time is owned by the optional `UStateGraphClock` component (`engine/core/state/state_graph_clock.h` / `engine/core/state/state_graph_clock.c`):
 
 ```text
 UStateGraphNode.duration_frames   stable definition
@@ -370,14 +372,14 @@ UStateGraphClock               optional temporal state
 
 This separation has two consequences:
 
-- a graph without timeouts runs without additional temporal storage;
-- the runtime owner decides whether it needs a clock. `ULevelManager` owns one in graph-driven mode; direct mode runs without this component.
+- a graph that does not use timeouts does not have to store `elapsed_frames`;
+- the runtime owner decides whether it needs a clock. `ULevelManager` owns one in graph-driven mode; direct mode does not depend on it.
 
 ## 9. TLSS
 
 TLSS lives in `engine/core/tlss/`.
 
-It provides simulation cadences of 1/2/4/8/16 frames and distributes phases across entries to spread throttled-task wakeups over time.
+It provides simulation cadences of 1/2/4/8/16 frames and distributes phases across entries so all throttled tasks are not woken on the same frame.
 
 The level contains separate configuration for:
 
@@ -386,7 +388,7 @@ The level contains separate configuration for:
 
 NPCs can be classified as `ACTIVE`, `OFFSCREEN` or `DORMANT`. `engine/level/level_ai.c` selects their activity from the viewport, then `engine/actor/npc_ai.c` applies the matching TLSS cadence.
 
-Collision also uses TLSS when resolving hits/projectiles. A newly active hitbox can force immediate resolution to preserve its first active frame.
+Collision also uses TLSS when resolving hits/projectiles. A newly active hitbox can force immediate resolution so its first active frame is not lost.
 
 ## 10. Collision: physics versus gameplay meaning
 
@@ -400,7 +402,7 @@ This layer handles physical primitives independent of gameplay:
 - trajectory projection;
 - `unsigned_physics_trajectory_parabola_height()` for generic parabolic height.
 
-It handles geometry, constraints and trajectories. An ability such as Arthur's jump chooses its height and charge rules, then reuses the engine trajectory primitive.
+It knows nothing about players, NPCs or attacks. An ability such as Arthur's jump chooses its height and charge rules, then reuses the engine trajectory primitive.
 
 ### `engine/collision`
 
@@ -423,25 +425,28 @@ The level orchestrates the frame:
 6. resolves projectiles;
 7. detects attacker/target pairs.
 
-Incomplete registration invalidates the frame's collision results. This guarantees insertion-order-independent behavior when fixed buffers are saturated.
+Incomplete registration invalidates the frame's collision results. This prevents results from becoming insertion-order dependent when fixed buffers are saturated.
 
-Detected pairs are exposed as frame-local `UCollisionHit` values. `unsigned_level_collision_hits()` lets the `resolve_hits` callback iterate over them. Gameplay code then applies damage/guard/reactions or deduplicates an activation, while geometric intersection remains the engine's responsibility.
+Detected pairs are exposed as frame-local `UCollisionHit` values. `unsigned_level_collision_hits()` lets the `resolve_hits` callback iterate over them. Gameplay code can then apply damage/guard/reactions or deduplicate an activation, but it must not repeat the geometric intersection that the engine has already resolved.
 
 ## 11. Display, renderer and system
 
-The structure explicitly separates three responsibilities.
+The current structure explicitly separates three responsibilities.
 
 ### `engine/display`
 
 Contains backend-independent presentation structures and behavior:
 
 - camera;
+- generic presentation effects (`UEffect`);
 - sprite and render state;
 - text;
 - UI;
-- viewport and viewport effects.
+- viewport.
 
 Generic UI lives in `engine/display/ui/`. Reusable widgets live in `engine/display/ui/widget/`, for example `progress_bar.c`.
+
+Visual effects are centralized in `engine/display/effect/`: `effect.[ch]` defines sampling/composition and `effects.[ch]` groups the built-in presets. The same `UEffect` can be owned by `UViewport.effect` or `USprite.effect`. An object has one local effect slot; the renderer then composes the viewport effect with the sprite effect. Built-in presets cover static transform, zoom, pseudo-3D turn, shake, bob, blink, shear and wave. Their configuration is non-owning and must outlive the binding. Gameplay configures an effect; it does not manipulate SCBs or Neo Geo shrink units.
 
 ### `engine/renderer`
 
@@ -473,13 +478,19 @@ Contains platform details:
 - VRAM writer;
 - save backend.
 
-`engine/system/renderer_backend.h` is the boundary called by renderers to request hardware operations while keeping encoding details out of level logic.
+`engine/system/renderer_backend.h` is the boundary called by renderers to request hardware operations without exposing their encoding details to level logic.
 
 ## 12. Backgrounds and sprites
 
 `engine/renderer/background_renderer.c` treats backgrounds as reusable strips of hardware sprites. The cache avoids rewriting the entire screen for a simple scroll.
 
-`engine/renderer/sprite_renderer.c` uses sprite dirty state so only modified parts are pushed to the backend: graphics, position, shrink, and so on.
+`engine/renderer/sprite_renderer.c` uses sprite dirty state so only modified parts are pushed to the backend: graphics, position, scale/shrink, flips and layout. It composes the viewport effect with the sprite-local effect, applies pivots, and chooses between the compact hardware chain and per-column rendering when required.
+
+`UCharacterShadow` remains a character component, but its responsibility is now limited to converting `UCharacter.height` into a generic scale. It owns a `UTransformEffect` bound to `shadow.sprite.effect`; rendering math and Neo Geo encoding stay outside `character_shadow.c`.
+
+Native sprite transforms exposed by the engine are translation, X/Y scale up to 100%, pivots, X/Y flips, visibility and per-column deformation. The `turn` preset creates a pseudo-3D rotation illusion with squash + flip. Neo Geo hardware cannot magnify a sprite beyond its source size or perform arbitrary rotation: true >100% zoom or free rotation requires pre-rendered frames/tiles.
+
+The hardware-specific vertical-shrink caveat remains inside `engine/system/sprite_backend.c`. On Neo Geo, SCB3 keeps a fixed display window while the vertical zoom lookup can read SCB1 rows below the sprite's logical height. A `USpriteDefinition` can therefore opt into `clear_unused_rows` and provide a `transparent_tile`; the backend initializes unused SCB1 rows with that tile only when the hardware layout is rebuilt. This prevents stale VRAM data from resurfacing during shrink without adding work to every animation frame.
 
 `engine/renderer/level_renderer.c` brackets rendering as follows:
 
@@ -511,7 +522,7 @@ engine/system/fix.c
 
 Current example: `src/hud/demo_hud.c` builds a `UUIScreen`, a `UUIProgressBar`, a `UUIRenderer` and a `UNeoGeoUIRenderer`, then renders the result on the FIX layer.
 
-The progress bar can be bound to a `UGameplayAttribute`. The widget stores normalized progress in the 0..256 range, which the renderer can reuse directly every frame. The current HUD intentionally owns the `on_change` callbacks of Health and its bounds while bound; this policy remains in `src/hud/`.
+The progress bar can be bound to a `UGameplayAttribute`. The widget stores normalized progress in the 0..256 range so the renderer does not depend directly on gameplay state. While visible, the HUD observes Health and its bounds, compares them with its cache, and synchronizes the widget only when a displayed value changed. It never takes ownership of `UGameplayAttribute.on_change`, so UI cannot replace a gameplay callback or retain a subscription that must be detached after the player is destroyed.
 
 For menus, `unsigned_ui_input_from_controller()` transforms a `UInputState` into standard UI commands (navigation, value, confirm, cancel). Controller mapping is therefore centralized in `engine/display/ui/input.h` / `engine/display/ui/input.c`, while the meaning of a concrete screen remains in `src/menu/`.
 
@@ -533,7 +544,7 @@ The project driver currently lives in `src/audio/sound_driver.s`.
 
 The platform backend is in `engine/system/save_backend.c`.
 
-Sets use a coherent generation across blocks so an interrupted write is recognized distinctly from a complete valid save.
+Sets use a coherent generation across blocks so an interrupted write is not mistaken for a complete valid save.
 
 ## 16. Neo Geo runtime and BIOS
 
@@ -548,13 +559,13 @@ The main application phases are:
 
 They are built on top of BIOS USER requests. `PLAYER_START` remains authoritative for player acceptance and credit consumption.
 
-The details of USER 1/2/3 lifecycle, GAME START COMPULSION, audio transport and credits are documented in `engine/system/BIOS_WORKFLOW.md`.
+The details of USER 1/2/3 lifecycle, GAME START COMPULSION, audio transport and credits are documented in `docs/Bios_en.md`.
 
 ### Demo flow
 
 `src/game/demo_flow.c` remains an application rule. It describes scenes through a rule table (timeout/event/failure owner) instead of scattering these transitions across large `switch` statements. It uses `UTimerPool` for presentation durations and to expose the countdown to the HUD.
 
-`demo_flow.c` orchestrates the concrete demo scenario; `UStateGraphClock` provides an optional generic component for timing a `UStateGraph`. The two mechanisms serve distinct responsibilities.
+This flow must not be confused with `UStateGraphClock`: the former orchestrates the concrete demo scenario; the latter is an optional generic component used to time a `UStateGraph`.
 
 ## 17. Boundary between engine and game
 
@@ -569,4 +580,4 @@ A practical rule helps decide where new code belongs:
 - concrete character: `src/characters/`;
 - concrete interface: `src/menu/` or `src/hud/`.
 
-This separation provides the foundation for future architecture changes.
+This separation is the foundation to preserve as the architecture evolves.

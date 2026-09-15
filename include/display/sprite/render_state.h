@@ -28,6 +28,9 @@ typedef struct USpriteRenderState {
     u8 sprite_count;
     u8 shrink_x;
     u8 shrink_y;
+    /** Presentation-effect mirror toggles last selected by the sprite renderer. */
+    u8 effect_flip_x;
+    u8 effect_flip_y;
     /** Last committed driver X/Y and SCB2, used for change detection. */
     s16 rendered_x;
     s16 rendered_y;

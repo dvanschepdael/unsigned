@@ -3,7 +3,9 @@
  * @brief Translates renderer sprite operations into Neo Geo SCB/VRAM writes.
  */
 
-#include "display/sprite/attributes.h"
+#include "display/sprite/config.h"
+#include "display/sprite/limits.h"
+#include "display/sprite/scale.h"
 #include "system/renderer_backend.h"
 #include "system/video.h"
 #include "system/vram_writer_internal.h"
@@ -12,18 +14,29 @@
 
 #define SPRITE_SCB3_STICKY 0x0040u
 
-/** Encodes logical sprite palette/flip attributes into the Neo Geo tile attribute word. */
+static bool sprite_backend_flip_x(const USprite *sprite) {
+    return (sprite->flip_x != 0u) != (sprite->render.effect_flip_x != 0u);
+}
+
+static bool sprite_backend_flip_y(const USprite *sprite) {
+    return (sprite->flip_y != 0u) != (sprite->render.effect_flip_y != 0u);
+}
+
+/** Encodes logical palette plus base/effect mirror state into the Neo Geo tile attribute word. */
 static u16 sprite_backend_attributes(const USprite *sprite) {
     const USpriteDefinition *definition = sprite->definition;
     const u16 auto_animation = (u16)(definition->auto_animation & U_SPRITE_AUTO_ANIMATION_MASK);
-    return (u16)(((u16)sprite->palette << 8u) | auto_animation | sprite->flip_x);
+    const u16 flip_x = sprite_backend_flip_x(sprite) ? U_SPRITE_FLIP_X_MASK : 0u;
+    const u16 flip_y = sprite_backend_flip_y(sprite) ? U_SPRITE_FLIP_Y_MASK : 0u;
+    return (u16)(((u16)sprite->palette << 8u) | auto_animation | flip_x | flip_y);
 }
 
-/** Returns the graphics tile index used by a logical sprite frame tile. */
-static u16 sprite_backend_tile_at(const USprite *sprite, const UFrame *frame, u8 column) {
+/** Returns the source tile for one destination column/row after logical mirroring. */
+static u16 sprite_backend_tile_at(const USprite *sprite, const UFrame *frame, u8 column, u8 row) {
     const USpriteDefinition *definition = sprite->definition;
-    const u8 source_column = sprite->flip_x ? (u8)(definition->width_tiles - 1u - column) : column;
-    return (u16)(definition->first_tile + frame->tile_offset + source_column);
+    const u8 source_column = sprite_backend_flip_x(sprite) ? (u8)(definition->width_tiles - 1u - column) : column;
+    const u8 source_row = sprite_backend_flip_y(sprite) ? (u8)(definition->height_tiles - 1u - row) : row;
+    return (u16)(definition->first_tile + frame->tile_offset + (u16)source_row * definition->width_tiles + source_column);
 }
 
 /** Encodes a logical sprite Y position and height into the Neo Geo SCB3 register format. */
@@ -38,12 +51,36 @@ static void sprite_backend_write_graphics_full(const USprite *sprite, const UFra
 
     unsigned_neogeo_vram_set_mod(1u);
     for (u8 column = 0u; column < sprite->render.sprite_count; ++column) {
-        u16 tile = sprite_backend_tile_at(sprite, frame, column);
         *REG_VRAMADDR = (u16)(ADDR_SCB1 + (sprite->render.first_sprite + column) * 64u);
         for (u8 row = 0u; row < definition->height_tiles; ++row) {
-            *REG_VRAMRW = tile;
+            *REG_VRAMRW = sprite_backend_tile_at(sprite, frame, column, row);
             *REG_VRAMRW = attributes;
-            tile = (u16)(tile + definition->width_tiles);
+        }
+    }
+}
+
+/**
+ * Fill SCB1 rows outside the logical sprite height with a known transparent tile.
+ *
+ * Vertical shrinking on Neo Geo does not reduce the SCB3 display window. The
+ * L0 zoom lookup can therefore address rows below `height_tiles`; if those rows
+ * contain stale data from a previous owner, isolated garbage pixels become
+ * visible. Padding is written only when the hardware layout is rebuilt, not on
+ * normal animation-frame changes.
+ */
+static void sprite_backend_write_unused_rows(const USprite *sprite) {
+    const USpriteDefinition *definition = sprite->definition;
+
+    if (!definition->clear_unused_rows || definition->height_tiles >= UNSIGNED_SPRITE_MAX_HEIGHT_TILES) {
+        return;
+    }
+
+    unsigned_neogeo_vram_set_mod(1u);
+    for (u8 column = 0u; column < sprite->render.sprite_count; ++column) {
+        *REG_VRAMADDR = (u16)(ADDR_SCB1 + (sprite->render.first_sprite + column) * 64u + (u16)definition->height_tiles * 2u);
+        for (u8 row = definition->height_tiles; row < UNSIGNED_SPRITE_MAX_HEIGHT_TILES; ++row) {
+            *REG_VRAMRW = definition->transparent_tile;
+            *REG_VRAMRW = 0u;
         }
     }
 }
@@ -54,11 +91,9 @@ static void sprite_backend_write_tiles(const USprite *sprite, const UFrame *fram
 
     unsigned_neogeo_vram_set_mod(2u);
     for (u8 column = 0u; column < sprite->render.sprite_count; ++column) {
-        u16 tile = sprite_backend_tile_at(sprite, frame, column);
         *REG_VRAMADDR = (u16)(ADDR_SCB1 + (sprite->render.first_sprite + column) * 64u);
         for (u8 row = 0u; row < definition->height_tiles; ++row) {
-            *REG_VRAMRW = tile;
-            tile = (u16)(tile + definition->width_tiles);
+            *REG_VRAMRW = sprite_backend_tile_at(sprite, frame, column, row);
         }
     }
 }
@@ -117,19 +152,24 @@ static void sprite_backend_write_driver_xy(const USprite *sprite, s16 screen_x, 
     *REG_VRAMRW = (u16)((s32)screen_x * 128);
 }
 
-u16 unsigned_sprite_backend_encode_scb2(const USpriteRenderState *render, s16 zoom_offset) {
-    s32 shrink_x = (s32)(render->shrink_x & 0x0fu) - zoom_offset / 16;
-    s32 shrink_y = (s32)render->shrink_y - zoom_offset;
+u16 unsigned_sprite_backend_encode_scb2(const USpriteRenderState *render, const UEffectSample *effect) {
+    const UEffectSample identity = unsigned_effect_identity_sample();
+    const UEffectSample *sample = effect != NULL ? effect : &identity;
+    s32 shrink_x = unsigned_sprite_scale_shrink_x(render->shrink_x, sample->scale_x);
+    s32 shrink_y = unsigned_sprite_scale_shrink_y(render->shrink_y, sample->scale_y);
+
+    shrink_x -= sample->zoom_offset / 16;
+    shrink_y -= sample->zoom_offset;
 
     if (shrink_x < 0) {
         shrink_x = 0;
-    } else if (shrink_x > 0x0f) {
-        shrink_x = 0x0f;
+    } else if (shrink_x > (s32)U_SPRITE_SHRINK_X_FULL) {
+        shrink_x = U_SPRITE_SHRINK_X_FULL;
     }
     if (shrink_y < 0) {
         shrink_y = 0;
-    } else if (shrink_y > 0xff) {
-        shrink_y = 0xff;
+    } else if (shrink_y > (s32)U_SPRITE_SHRINK_Y_FULL) {
+        shrink_y = U_SPRITE_SHRINK_Y_FULL;
     }
     return (u16)(((u16)shrink_x << 8u) | (u16)shrink_y);
 }
@@ -137,13 +177,17 @@ u16 unsigned_sprite_backend_encode_scb2(const USpriteRenderState *render, s16 zo
 void unsigned_sprite_backend_flush_graphics(const USprite *sprite, const UFrame *frame, u8 dirty) {
     if ((dirty & U_SPRITE_RENDER_DIRTY_GRAPHICS) == U_SPRITE_RENDER_DIRTY_GRAPHICS) {
         sprite_backend_write_graphics_full(sprite, frame);
-        return;
+    } else {
+        if ((dirty & U_SPRITE_RENDER_DIRTY_TILES) != 0u) {
+            sprite_backend_write_tiles(sprite, frame);
+        }
+        if ((dirty & U_SPRITE_RENDER_DIRTY_ATTRIBUTES) != 0u) {
+            sprite_backend_write_attributes(sprite);
+        }
     }
-    if ((dirty & U_SPRITE_RENDER_DIRTY_TILES) != 0u) {
-        sprite_backend_write_tiles(sprite, frame);
-    }
-    if ((dirty & U_SPRITE_RENDER_DIRTY_ATTRIBUTES) != 0u) {
-        sprite_backend_write_attributes(sprite);
+
+    if ((dirty & U_SPRITE_RENDER_DIRTY_LAYOUT) != 0u) {
+        sprite_backend_write_unused_rows(sprite);
     }
 }
 
@@ -164,19 +208,63 @@ void unsigned_sprite_backend_flush_chained_transform(const USprite *sprite, s16 
     }
 }
 
-void unsigned_sprite_backend_write_effect_positions(const USprite *sprite, const UViewport *viewport, s16 screen_x, s16 screen_y) {
+/**
+ * Write independent SCB2/SCB3/SCB4 values when either effect breaks hardware chaining.
+ * A uniform sprite scale still compacts columns and applies its pivot as one logical sprite;
+ * viewport per-column offsets are then layered on top without leaking composition policy into
+ * actor/game code.
+ */
+void unsigned_sprite_backend_write_effect_positions(const USprite *sprite, const UEffect *viewport_effect, const UEffect *sprite_effect, s16 screen_x, s16 screen_y) {
     const u16 first_sprite = sprite->render.first_sprite;
     const u8 sprite_count = sprite->render.sprite_count;
+    const bool sprite_uniform = !unsigned_effect_is_per_column(sprite_effect);
+    const UEffectSample uniform_sprite = unsigned_effect_sample(sprite_effect, 0u, sprite_count);
+    const u8 base_shrink_x = (u8)(sprite->render.shrink_x & U_SPRITE_SHRINK_X_FULL);
+    const u16 base_column_width = (u16)base_shrink_x + 1u;
+    const u16 base_width = unsigned_sprite_scaled_width_pixels(sprite_count, base_shrink_x);
+    const u16 base_height = unsigned_sprite_scaled_height_pixels(sprite->definition->height_tiles, sprite->render.shrink_y);
+    u16 uniform_column_width = base_column_width;
+    s16 uniform_pivot_x = 0;
+    s16 uniform_pivot_y = 0;
+
+    if (sprite_uniform) {
+        const u8 scaled_x = unsigned_sprite_scale_shrink_x(sprite->render.shrink_x, uniform_sprite.scale_x);
+        const u8 scaled_y = unsigned_sprite_scale_shrink_y(sprite->render.shrink_y, uniform_sprite.scale_y);
+        const u16 scaled_width = unsigned_sprite_scaled_width_pixels(sprite_count, scaled_x);
+        const u16 scaled_height = unsigned_sprite_scaled_height_pixels(sprite->definition->height_tiles, scaled_y);
+        uniform_column_width = (u16)scaled_x + 1u;
+        uniform_pivot_x = unsigned_sprite_scale_pivot_offset(base_width, scaled_width, uniform_sprite.pivot_x);
+        uniform_pivot_y = unsigned_sprite_scale_pivot_offset(base_height, scaled_height, uniform_sprite.pivot_y);
+    }
 
     unsigned_neogeo_vram_set_mod(0x200u);
     for (u8 column = 0u; column < sprite_count; ++column) {
-        const UEffectSample effect = unsigned_effect_sample(&viewport->effect, column, sprite_count);
-        const u16 scb2 = unsigned_sprite_backend_encode_scb2(&sprite->render, effect.zoom_offset);
+        const UEffectSample viewport_sample = unsigned_effect_sample(viewport_effect, column, sprite_count);
+        const UEffectSample local_sprite = sprite_uniform ? uniform_sprite : unsigned_effect_sample(sprite_effect, column, sprite_count);
+        const UEffectSample composed = unsigned_effect_compose_samples(viewport_sample, local_sprite);
+        const u16 scb2 = unsigned_sprite_backend_encode_scb2(&sprite->render, &composed);
+        s16 pivot_x = uniform_pivot_x;
+        s16 pivot_y = uniform_pivot_y;
+        u16 column_step = uniform_column_width;
+
+        if (!sprite_uniform) {
+            const u8 scaled_x = unsigned_sprite_scale_shrink_x(sprite->render.shrink_x, local_sprite.scale_x);
+            const u8 scaled_y = unsigned_sprite_scale_shrink_y(sprite->render.shrink_y, local_sprite.scale_y);
+            const u16 scaled_column_width = (u16)scaled_x + 1u;
+            const u16 scaled_height = unsigned_sprite_scaled_height_pixels(sprite->definition->height_tiles, scaled_y);
+            pivot_x = unsigned_sprite_scale_pivot_offset(base_column_width, scaled_column_width, local_sprite.pivot_x);
+            pivot_y = unsigned_sprite_scale_pivot_offset(base_height, scaled_height, local_sprite.pivot_y);
+            column_step = base_column_width;
+        }
 
         *REG_VRAMADDR = (u16)(ADDR_SCB2 + first_sprite + column);
         *REG_VRAMRW = scb2;
-        *REG_VRAMRW = (u16)(((s32)UNSIGNED_VIDEO_SCB3_Y_ORIGIN - screen_y - effect.offset_y) * 128 + sprite->definition->height_tiles);
-        *REG_VRAMRW = (u16)(((s32)screen_x + (s32)column * 16 + effect.offset_x) * 128);
+        if ((composed.flags & U_EFFECT_SAMPLE_HIDDEN) != 0u) {
+            *REG_VRAMRW = 0u;
+        } else {
+            *REG_VRAMRW = (u16)(((s32)UNSIGNED_VIDEO_SCB3_Y_ORIGIN - screen_y - composed.offset_y - pivot_y) * 128 + sprite->definition->height_tiles);
+        }
+        *REG_VRAMRW = (u16)(((s32)screen_x + (s32)column * column_step + composed.offset_x + pivot_x) * 128);
     }
 }
 
