@@ -1,6 +1,6 @@
 # Getting Started with Unsigned
 
-This guide is intended for a developer who knows the basics of C but is new to the engine and/or the Neo Geo. The goal is not to memorize every file: the important part is to understand **who owns the data**, **who decides behavior**, **who decides rendering**, and **who actually writes to the hardware**.
+This guide is intended for developers who know the basics of C and are discovering the engine and/or the Neo Geo. The reading strategy relies on four landmarks: **who owns the data**, **who decides behavior**, **who decides rendering**, and **who actually writes to the hardware**. These landmarks make it possible to locate subsystem responsibilities quickly without memorizing every file.
 
 ## 1. Five landmarks to know
 
@@ -8,7 +8,7 @@ This guide is intended for a developer who knows the basics of C but is new to t
 
 `UGameInstance` (`engine/game/game.h`) groups the generic subsystems of a game session: input, timers, gameplay, actor pools, level, renderer, level manager, viewport and audio.
 
-`unsigned_game_instance_init()` receives already allocated buffers through `UGameInstanceStorage`. Insufficient capacity should therefore be fixed at startup rather than hidden behind dynamic allocation during gameplay.
+`unsigned_game_instance_init()` receives already allocated buffers through `UGameInstanceStorage`. Capacities are sized at startup, which keeps memory usage deterministic during gameplay.
 
 ### `ULevelDefinition`: declared content
 
@@ -21,7 +21,7 @@ This guide is intended for a developer who knows the basics of C but is new to t
 - gameplay hit resolution;
 - backdrop color.
 
-The definition must remain valid for as long as the level uses it.
+The definition remains valid for the full lifetime of the active level.
 
 ### `ULevel`: mutable state
 
@@ -36,7 +36,7 @@ The definition must remain valid for as long as the level uses it.
 - gameplay runtime;
 - active definition and application context.
 
-The `ULevelDefinition` / `ULevel` split prevents content data from being mixed with runtime state.
+The `ULevelDefinition` / `ULevel` split clearly separates content data from runtime state.
 
 ### `UActor` / `UCharacter`: world and combat
 
@@ -55,9 +55,9 @@ The `ULevelDefinition` / `ULevel` split prevents content data from being mixed w
 
 BIOS, VRAM, FIX, video, platform input, audio transport and Neo Geo storage details are grouped under `engine/system/`.
 
-Level or character code must not bypass this layer to write directly to hardware registers.
+Level and character code use this layer's APIs for operations involving hardware registers, BIOS services or VRAM.
 
-## 2. Reading the directory tree without getting lost
+## 2. Reading the directory tree quickly
 
 Start with this map:
 
@@ -87,7 +87,7 @@ src/
   audio/
 ```
 
-Simple rule: `engine/` must remain reusable; `src/` may know the exact needs of the game.
+Simple rule: `engine/` contains reusable mechanisms; `src/` describes the game's specific needs and composes those mechanisms.
 
 ## 3. From BIOS to one game frame
 
@@ -120,7 +120,7 @@ engine/system/runtime.c
         +--> audio transport
 ```
 
-The BIOS remains authoritative over some system transitions. Do not reason as if this were a fully autonomous PC-style main loop.
+The BIOS remains authoritative over some system transitions. The game loop is therefore best understood as cooperation between application runtime and the BIOS lifecycle, rather than as a fully autonomous main loop.
 
 ## 4. Reading one level frame
 
@@ -148,7 +148,7 @@ cues
 background tick
 ```
 
-This order is a behavioral contract. Moving a stage can change gameplay even if the code still compiles.
+This order is a behavioral contract. Changing the position of a stage can change gameplay even when the code still compiles.
 
 Example: `resolve_hits` runs after abilities but before end-of-frame effects/cues.
 
@@ -166,7 +166,7 @@ The generation distinguishes the old logical instance from the new one.
 
 ### Practical rule
 
-Do not keep a pointer to a slot while assuming it remains the same logical object. Check the subsystem contract and, when available, the `generation` mechanism.
+When keeping a reference to a slot, rely on the subsystem contract and, where available, the `generation` mechanism. Generation identifies the logical instance even when a memory address is reused.
 
 ## 6. Where should code be added?
 
@@ -178,7 +178,7 @@ Look first at:
 - `engine/gameplay/`;
 - optionally `engine/physics/` or `engine/collision/`.
 
-If the mechanic only applies to one game character, put it under `src/characters/` instead.
+A mechanic specific to one game character naturally belongs under `src/characters/`.
 
 ### A new player action
 
@@ -190,7 +190,7 @@ If the mechanic only applies to one game character, put it under `src/characters
 6. define how the ability ends or is cancelled;
 7. test activation failure when the pool is full.
 
-For continuous direction input, prefer one `ANY` binding covering the D-pad, then read `UPlayer.input_state` / `unsigned_input_direction()`. Do not reserve one separate ability per direction when the logical action is unique.
+For continuous direction input, one `ANY` binding can cover the D-pad; the ability then reads `UPlayer.input_state` / `unsigned_input_direction()`. This keeps one ability for one logical action, including diagonal movement.
 
 Useful files:
 
@@ -201,7 +201,7 @@ Useful files:
 - `engine/gameplay/gameplay_pool.c`;
 - examples under `src/characters/player/demo/` and `src/characters/player/arthur/`.
 
-For a reaction that replaces all current actions of a character, use the owner-level pool API (`release_owner` / `replace_owner`) instead of inspecting `UAbilityPool` internal arrays directly.
+For a reaction that replaces all current actions of a character, the owner-level pool API (`release_owner` / `replace_owner`) centralizes replacement and encapsulates `UAbilityPool` internal arrays.
 
 ### Moving a character and limiting its area
 
@@ -217,7 +217,7 @@ engine/input         engine/actor            engine/physics
 - `unsigned_character_set_facing()` handles orientation;
 - `unsigned_physics_movement_constrain()` optionally applies `UMovementBounds`.
 
-Do not add bounds to `UActor`: the actor stores a position, while level/gameplay code decides whether that position must be constrained.
+`UActor` stores the world position. Level or gameplay code then selects `UMovementBounds` and applies the constraint when the playable area requires it.
 
 ### A new attribute
 
@@ -225,7 +225,7 @@ Attributes are defined in `engine/gameplay/attribute.h`.
 
 For an attribute specific to the demo player character, see `src/characters/player/demo/player_health.c`.
 
-An `on_change` callback can synchronize UI, as the HUD does for player health. To apply a delta, prefer `unsigned_gameplay_attribute_add_current_value()` instead of reimplementing clamp logic locally.
+An `on_change` callback can synchronize UI, as the HUD does for player health. To apply a delta, `unsigned_gameplay_attribute_add_current_value()` directly provides the shared saturation, clamp and notification rules.
 
 ### A new NPC
 
@@ -235,7 +235,7 @@ An `on_change` callback can synchronize UI, as the HUD does for player health. T
 4. call `unsigned_npc_init()`;
 5. let `level_ai.c` and TLSS manage its cadence according to activity.
 
-`UStateGraph` does not contain elapsed time. If an owner needs `U_TRANSITION_ON_TIMEOUT` transitions, it must explicitly own a `UStateGraphClock` and use `unsigned_state_graph_clock_tick()`. Do not reintroduce a time counter into the generic graph structure.
+`UStateGraph` carries the graph's logical state. When an owner uses `U_TRANSITION_ON_TIMEOUT` transitions, it explicitly owns a `UStateGraphClock` and calls `unsigned_state_graph_clock_tick()`. Temporal state therefore stays in the dedicated timing component.
 
 Useful files:
 
@@ -250,14 +250,14 @@ Concrete content belongs under `src/levels/<level_name>/`.
 
 1. declare a `ULevelDefinition`;
 2. define backgrounds and spawns with a sufficient lifetime;
-3. use `load` for setup that cannot be expressed as data;
+3. use `load` for imperative setup that complements declarative data;
 4. use `enter` / `exit` for state changes around the active level;
 5. use `unload` to undo work performed by `load`;
 6. expose the definition to `src/game/demo_scenes.c` or the relevant flow.
 
 Loading is transactional: an error triggers rollback of content that has already been installed.
 
-## 7. Display, renderer and system: do not mix them up
+## 7. Display, renderer and system: three complementary responsibilities
 
 This separation is essential in the current structure.
 
@@ -285,7 +285,7 @@ Decides how these concepts are rendered:
 
 ### `engine/system`
 
-Performs operations that truly depend on the Neo Geo:
+Performs operations that depend directly on the Neo Geo:
 
 - VRAM;
 - FIX;
@@ -345,32 +345,30 @@ For a concrete game interface, use `src/menu/` or `src/hud/`.
 4. calls `unsigned_ui_progress_bar_sync()` when the value changes;
 5. renders the `UUIScreen` through `UUIRenderer` + `UNeoGeoUIRenderer`.
 
-The widget stores normalized progress in the 0..256 range. The renderer therefore does not need to repeat the full attribute calculation every frame. The current HUD intentionally owns these `on_change` slots while bound; this choice has not been moved into the engine.
+The widget stores normalized progress in the 0..256 range. The renderer reuses this normalized value directly on each frame. The current HUD intentionally owns the `on_change` slots while bound; this policy remains in `src/hud/`.
 
-For menus, use `unsigned_ui_input_from_controller()` to convert the controller snapshot into standard `UUIInput` instead of duplicating direction/A/B mapping in each screen.
+For menus, `unsigned_ui_input_from_controller()` converts the controller snapshot into standard `UUIInput` and centralizes direction/A/B mapping for all screens.
 
-## 9. Collisions: two layers to distinguish
+## 9. Collisions: two complementary layers
 
-`engine/physics` knows about boxes and collision layers. It does not know what an attack is.
-
-`engine/collision` adds:
+`engine/physics` handles boxes, collision layers and geometric primitives. Attack semantics appear in `engine/collision`, which adds:
 
 - hitbox/hurtbox;
 - actors;
 - projectile;
 - hit detection.
 
-`engine/level/level_collision.c` then orchestrates all of this for the active level.
+`engine/level/level_collision.c` then orchestrates the complete pipeline for the active level.
 
 Static collisions are built at load time. Dynamic collisions are cleared and registered again every frame.
 
-The `ULevelDefinition.resolve_hits` callback must read already detected pairs through `unsigned_level_collision_hits()`. It then applies game rules (damage, guard, reactions, deduplication), but does not recompute hitbox/hurtbox intersections itself.
+The `ULevelDefinition.resolve_hits` callback iterates over already detected pairs through `unsigned_level_collision_hits()`, then applies game rules such as damage, guard, reactions and deduplication. Geometric intersection remains the responsibility of the collision pipeline.
 
-If registration buffers are saturated, the collision frame is invalidated instead of being partially computed.
+If registration buffers are saturated, the collision frame is invalidated rather than partially computed.
 
-## 10. State graph: adding time without polluting the graph
+## 10. State graph: separating logic and time
 
-`UStateGraph` owns the current logical state, not a frame counter. `UStateGraphNode.duration_frames` is definition data; `UStateGraphClock` is the optional temporal runtime.
+`UStateGraph` owns the current logical state. `UStateGraphNode.duration_frames` is definition data; `UStateGraphClock` carries the optional temporal runtime.
 
 The pattern is:
 
@@ -382,7 +380,7 @@ each frame that requires timeouts:
     unsigned_state_graph_clock_tick(&clock, &graph)
 ```
 
-If no timeout is required, simply call `unsigned_state_graph_tick()` and do not store a clock. `ULevelManager` demonstrates both modes: graph-driven with a clock, or direct control without a graph.
+Without timeouts, `unsigned_state_graph_tick()` is sufficient and the owner can operate without a clock. `ULevelManager` demonstrates both modes: graph-driven with a clock, or direct control without a graph.
 
 ## 11. TLSS: temporally reduced simulation
 
@@ -393,11 +391,11 @@ It can spread work over 1/2/4/8/16 frames. Two uses are currently configurable i
 - AI;
 - collision.
 
-Off-screen or dormant NPCs can therefore cost less without reducing the global frame rate.
+Off-screen or dormant NPCs can therefore cost less while preserving the global frame rate.
 
-Important: collision has an immediate-resolution mechanism for a hitbox that has just become active so a reduced TLSS cadence does not lose its first attack instant.
+Collision includes an immediate-resolution mechanism for a hitbox that has just become active. This preserves its first attack instant even with a reduced TLSS cadence.
 
-## 12. Neo Geo: what you should not simulate yourself
+## 12. Neo Geo: BIOS and system-runtime responsibilities
 
 On MVS/AES, the BIOS owns part of the lifecycle.
 
@@ -411,9 +409,9 @@ The system runtime notably manages:
 - GAME START COMPULSION;
 - associated audio handoff.
 
-Before changing this domain, read `engine/system/BIOS_WORKFLOW.md`, then the relevant public files under `engine/system/`.
+When changing this domain, start with `engine/system/BIOS_WORKFLOW.md`, then read the relevant public files under `engine/system/`.
 
-Do not simply convert a START button read from generic input into a decision to begin an MVS session: the BIOS `PLAYER_START` remains the authoritative source.
+A START press coming from generic input becomes an application request; effective MVS player acceptance remains driven by the BIOS `PLAYER_START`, which is the authoritative source.
 
 ## 13. Reading the demo project
 
@@ -430,7 +428,7 @@ To understand how all layers are assembled, follow this order:
 
 This path shows the boundary between the reusable engine and game content more clearly than reading every file in `engine/` one by one.
 
-In `demo_flow.c`, scene transitions are described by a rule table. `UTimerPool` remains responsible for presentation durations/countdowns. Do not confuse this application flow with `UStateGraphClock`, which is only used to time a generic `UStateGraph`.
+In `demo_flow.c`, scene transitions are described by a rule table. `UTimerPool` remains responsible for presentation durations/countdowns. `demo_flow.c` orchestrates the concrete demo scenario, while `UStateGraphClock` times a generic `UStateGraph`: the two components serve distinct responsibilities.
 
 ## 14. Recommended modification workflow
 
@@ -444,4 +442,4 @@ For a contribution:
 6. add or adapt a host test;
 7. then verify in MAME/hardware if the change depends on the Neo Geo.
 
-When a comment is necessary, document the invariant, lifetime, performance reason or BIOS constraint. Avoid paraphrasing the code.
+When a comment is useful, document the invariant, lifetime, performance reason or BIOS constraint. Prefer information that complements the code: intent, contract or technical rationale.
