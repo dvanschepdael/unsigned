@@ -1,6 +1,6 @@
 # Getting Started with Unsigned
 
-This guide is intended for developers who know the basics of C and are discovering the engine and/or the Neo Geo. The reading strategy relies on four landmarks: **who owns the data**, **who decides behavior**, **who decides rendering**, and **who actually writes to the hardware**. These landmarks make it possible to locate subsystem responsibilities quickly without memorizing every file.
+This guide is intended for developers who know the basics of C and are discovering the engine and/or the Neo Geo. The reading strategy is organized around four structuring questions: **who owns the data**, **who decides behavior**, **who decides rendering**, and **who actually writes to the hardware**. These questions make it possible to locate subsystem responsibilities quickly without memorizing every file.
 
 ## 1. Five landmarks to know
 
