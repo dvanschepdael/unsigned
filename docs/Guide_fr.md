@@ -1,6 +1,6 @@
 # Débuter dans Unsigned
 
-Ce guide s'adresse à un développeur qui connaît les bases du C et découvre le moteur et/ou la Neo Geo. La lecture s'appuie sur quatre repères : **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**. Ces repères permettent de retrouver rapidement la responsabilité d'un sous-système sans mémoriser chaque fichier.
+Ce guide s'adresse à un développeur qui connaît les bases du C et découvre le moteur et/ou la Neo Geo. La lecture s'organise autour de quatre questions structurantes : **qui possède les données**, **qui décide du comportement**, **qui décide du rendu** et **qui écrit réellement sur le matériel**. Ces questions permettent de retrouver rapidement la responsabilité d'un sous-système sans mémoriser chaque fichier.
 
 ## 1. Les cinq repères à connaître
 
