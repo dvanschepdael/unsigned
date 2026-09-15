@@ -6,7 +6,7 @@ This guide is intended for developers who know the basics of C and are discoveri
 
 ### `UGameInstance`: the engine root
 
-`UGameInstance` (`engine/game/game.h`) groups the generic subsystems of a game session: input, timers, gameplay, actor pools, level, renderer, level manager, viewport and audio.
+`UGameInstance` (`engine/game/game.h`) groups the generic subsystems of a game session: input, timers, gameplay, actor pools, level, level renderer, level manager, viewport and audio.
 
 `unsigned_game_instance_init()` receives already allocated buffers through `UGameInstanceStorage`. Capacities are sized at startup, which keeps memory usage deterministic during gameplay.
 
@@ -33,10 +33,10 @@ The definition remains valid for the full lifetime of the active level.
 - collisions;
 - background;
 - camera;
-- gameplay runtime;
+- `UGameplayRuntime`;
 - active definition and application context.
 
-The `ULevelDefinition` / `ULevel` split clearly separates content data from runtime state.
+The `ULevelDefinition` / `ULevel` split clearly separates content data from execution state.
 
 ### `UActor` / `UCharacter`: world and combat
 
@@ -78,7 +78,7 @@ engine/
   game/       UGameInstance
 
 src/
-  game/       demo composition and flow
+  game/       demo composition and scenario
   characters/ concrete characters
   levels/     concrete levels
   menu/       menus
@@ -110,7 +110,7 @@ engine/system/runtime.c
         |      |      +--> viewport
         |      |      +--> audio
         |      |
-        |      +--> demo flow / stage / menu
+        |      +--> demo scenario / stage / menu
         |
         +--> demo_loop_render()
         |      +--> unsigned_game_instance_render()
@@ -120,7 +120,7 @@ engine/system/runtime.c
         +--> audio transport
 ```
 
-The BIOS remains authoritative over some system transitions. The game loop is therefore best understood as cooperation between application runtime and the BIOS lifecycle, rather than as a fully autonomous main loop.
+The BIOS remains authoritative over some system transitions. The game loop is therefore best understood as cooperation between the application loop and the BIOS lifecycle, rather than as a fully autonomous main loop.
 
 ## 4. Reading one level frame
 
@@ -253,13 +253,13 @@ Concrete content belongs under `src/levels/<level_name>/`.
 3. use `load` for imperative setup that complements declarative data;
 4. use `enter` / `exit` for state changes around the active level;
 5. use `unload` to undo work performed by `load`;
-6. expose the definition to `src/game/demo_scenes.c` or the relevant flow.
+6. expose the definition to `src/game/demo_scenes.c` or the relevant scenario.
 
 Loading is transactional: an error triggers rollback of content that has already been installed.
 
 ## 7. Display, renderer and system: three complementary responsibilities
 
-This separation is essential in the current structure.
+This separation is essential in the current structure. `engine/renderer` names the subsystem that owns rendering policy; types such as `UUIRenderer` and `UNeoGeoUIRenderer` are the renderer objects and adapters used within that rendering path.
 
 ### `engine/display`
 
@@ -368,7 +368,7 @@ If registration buffers are saturated, the collision frame is invalidated rather
 
 ## 10. State graph: separating logic and time
 
-`UStateGraph` owns the current logical state. `UStateGraphNode.duration_frames` is definition data; `UStateGraphClock` carries the optional temporal runtime.
+`UStateGraph` owns the current logical state. `UStateGraphNode.duration_frames` is definition data; `UStateGraphClock` carries the optional temporal state.
 
 The pattern is:
 
