@@ -28,6 +28,14 @@ You should have received a copy of the GNU Lesser General Public License along w
 
 Unsigned is built on top of ngdevkit.
 
-ngdevkit is developed by Damien Ciabrini and is distributed under the **GNU Lesser General Public License v3.0 or later**.
+ngdevkit is distributed under the **GNU Lesser General Public License v3.0 or later**.
 
 Other third-party tools, libraries, assets, or dependencies used with Unsigned remain subject to their respective licenses.
+
+## Disclaimer
+
+Unsigned is provided as experimental software.
+
+Use of the project on emulators, development hardware, original Neo Geo hardware, flash cartridges or other devices is performed at the user's own responsibility.
+
+Nothing in this README constitutes legal advice. Licensing and intellectual-property requirements may vary depending on jurisdiction, distribution method and the third-party material used.
