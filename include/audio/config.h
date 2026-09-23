@@ -1,0 +1,35 @@
+/**
+ * @file config.h
+ * @brief Compile-time audio queue/catalog limits.
+ */
+
+#ifndef UNSIGNED_AUDIO_CONFIG_H
+#define UNSIGNED_AUDIO_CONFIG_H
+
+#ifndef UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY
+#ifdef UNSIGNED_GAME_MAX_PENDING_SOUND_EFFECTS
+#define UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY UNSIGNED_GAME_MAX_PENDING_SOUND_EFFECTS
+#else
+#define UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY 8
+#endif
+#endif
+
+#ifndef UNSIGNED_GAME_MAX_PENDING_SOUND_EFFECTS
+#define UNSIGNED_GAME_MAX_PENDING_SOUND_EFFECTS UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY
+#endif
+
+#ifndef UNSIGNED_AUDIO_MAX_EVENTS
+#define UNSIGNED_AUDIO_MAX_EVENTS 16
+#endif
+
+#ifndef UNSIGNED_AUDIO_MAX_PARAMETERS
+#define UNSIGNED_AUDIO_MAX_PARAMETERS 8
+#endif
+
+#ifndef UNSIGNED_AUDIO_MAX_VARIANTS_PER_SET
+#define UNSIGNED_AUDIO_MAX_VARIANTS_PER_SET 16
+#endif
+
+/* Authoring contract: queue/event/parameter limits are non-zero u8 capacities and variant sets contain at most 16 entries. */
+
+#endif

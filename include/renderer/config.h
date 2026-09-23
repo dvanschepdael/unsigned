@@ -1,0 +1,37 @@
+/**
+ * @file config.h
+ * @brief Build-time renderer instrumentation and scratch policy.
+ */
+
+#ifndef UNSIGNED_RENDERER_CONFIG_H
+#define UNSIGNED_RENDERER_CONFIG_H
+
+/*
+ * Runtime builds keep instrumentation disabled by default. Exact VRAM-word accounting and
+ * scanline-pressure measurement are useful for tests/tools, but they are deliberately excluded
+ * from the 68000 hot path. Host tests override this to 1 from the Makefile.
+ */
+#ifndef UNSIGNED_RENDERER_DIAGNOSTICS
+#define UNSIGNED_RENDERER_DIAGNOSTICS 0
+#endif
+
+/*
+ * CPU-side scratch used to freeze sprite effects before VBlank.
+ *
+ * 96 columns matches the engine's current UNSIGNED_SPRITE_MAX_PER_SCANLINE configuration and
+ * costs 576 bytes with the current three-word prepared-column layout. Composition must size this
+ * capacity for the maximum number of per-column actor sprite columns prepared in one frame.
+ */
+#ifndef UNSIGNED_RENDERER_SPRITE_EFFECT_COLUMN_CAPACITY
+#define UNSIGNED_RENDERER_SPRITE_EFFECT_COLUMN_CAPACITY 96u
+#endif
+
+/*
+ * Maximum number of same-width actor sprites grouped into one SCB3/SCB4 driver stream.
+ * The actor renderer uses a tiny stack array of pointers and transparently splits longer runs.
+ */
+#ifndef UNSIGNED_RENDERER_DRIVER_BATCH_CAPACITY
+#define UNSIGNED_RENDERER_DRIVER_BATCH_CAPACITY 16u
+#endif
+
+#endif
