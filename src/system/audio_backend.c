@@ -65,24 +65,39 @@ static void neo_geo_audio_transport_write(USoundCommand command) {
     *REG_SOUND = command;
 }
 
+/** Resolve one queue-relative offset in the fixed transport ring. */
+static inline u8 neo_geo_audio_queue_index(u8 offset) {
+    u16 index = (u16)neo_geo_audio_queue_head + offset;
+    if (index >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
+        index -= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY;
+    }
+    return (u8)index;
+}
+
+/** Clear volatile deferred-coin playback state. */
+static void neo_geo_audio_clear_deferred_coin_state(void) {
+    neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
+    neo_geo_audio_deferred_coin_count = 0u;
+}
+
 static void neo_geo_audio_transport_clear_queue(void) {
     for (u8 i = 0u; i < neo_geo_audio_queue_count; ++i) {
-        u16 index = (u16)neo_geo_audio_queue_head + i;
-        if (index >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
-            index -= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY;
-        }
-        neo_geo_audio_queue[(u8)index] = U_AUDIO_COMMAND_NONE;
+        neo_geo_audio_queue[neo_geo_audio_queue_index(i)] = U_AUDIO_COMMAND_NONE;
     }
 
     neo_geo_audio_queue_head = 0u;
     neo_geo_audio_queue_count = 0u;
 }
 
-void neo_geo_audio_transport_init(void) {
+/** Reset volatile 68k -> Z80 transport state without touching the persistent BIOS handoff token. */
+static void neo_geo_audio_transport_reset_state(void) {
     neo_geo_audio_transport_clear_queue();
     neo_geo_audio_bios_sound_sent = false;
-    neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
-    neo_geo_audio_deferred_coin_count = 0u;
+    neo_geo_audio_clear_deferred_coin_state();
+}
+
+void neo_geo_audio_transport_init(void) {
+    neo_geo_audio_transport_reset_state();
 }
 
 bool unsigned_audio_backend_send(USoundCommand command) {
@@ -90,12 +105,7 @@ bool unsigned_audio_backend_send(USoundCommand command) {
         return false;
     }
 
-    u16 index = (u16)neo_geo_audio_queue_head + neo_geo_audio_queue_count;
-    if (index >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
-        index -= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY;
-    }
-
-    neo_geo_audio_queue[(u8)index] = command;
+    neo_geo_audio_queue[neo_geo_audio_queue_index(neo_geo_audio_queue_count)] = command;
     ++neo_geo_audio_queue_count;
     return true;
 }
@@ -164,8 +174,7 @@ void neo_geo_audio_defer_coin_sound(void) {
 
 void neo_geo_audio_discard_deferred_coin_sounds(void) {
     neo_geo_audio_handoff_state_store(0u);
-    neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
-    neo_geo_audio_deferred_coin_count = 0u;
+    neo_geo_audio_clear_deferred_coin_state();
 }
 
 void neo_geo_audio_resume_deferred_coin_sounds(USoundCommand command) {
@@ -175,8 +184,7 @@ void neo_geo_audio_resume_deferred_coin_sounds(USoundCommand command) {
     neo_geo_audio_handoff_state_store(0u);
 
     if (pending == 0u) {
-        neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
-        neo_geo_audio_deferred_coin_count = 0u;
+        neo_geo_audio_clear_deferred_coin_state();
         return;
     }
 
@@ -186,9 +194,6 @@ void neo_geo_audio_resume_deferred_coin_sounds(USoundCommand command) {
 
 void neo_geo_audio_reset(void) {
     /* Command 3 is BIOS-reserved and has no acknowledgement. Never queue it behind game audio. */
-    neo_geo_audio_transport_clear_queue();
-    neo_geo_audio_bios_sound_sent = false;
-    neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
-    neo_geo_audio_deferred_coin_count = 0u;
+    neo_geo_audio_transport_reset_state();
     neo_geo_audio_transport_write((USoundCommand)NEO_GEO_SOUND_COMMAND_RESET_DRIVER);
 }

@@ -22,6 +22,17 @@ static void level_renderer_clear_actor_span(ULevelRenderer *renderer) {
     renderer->rendered_actor_sprite_count = 0u;
 }
 
+/** Clear all committed level-owned sprite ranges and publish the hidden renderer state. */
+static void level_renderer_hide_committed(ULevelRenderer *renderer) {
+    unsigned_renderer_backend_begin();
+    level_renderer_clear_actor_span(renderer);
+    unsigned_background_renderer_hide(&renderer->background);
+    unsigned_renderer_backend_end();
+
+    renderer->rendered_definition = NULL;
+    renderer->actor_first_sprite = UINT16_MAX;
+}
+
 /** Compute the contiguous actor hardware span selected by culling/stable-layout policy.
  * @pre Authored actor ranges fit the Neo Geo hardware range and do not overlap background ranges.
  */
@@ -215,6 +226,14 @@ static void level_renderer_commit_critical(ULevelRenderPlan *plan) {
     unsigned_actor_renderer_precommit_chain_boundaries(&plan->level->actors);
 }
 
+/** Publish the actor ownership snapshot produced by the prepared frame. */
+static void level_renderer_publish_actor_state(ULevelRenderer *renderer, const ULevelRenderPlan *plan, const ULevelDefinition *definition) {
+    renderer->rendered_actor_first_sprite = plan->actor_first_sprite;
+    renderer->rendered_actor_sprite_count = plan->actor_sprite_count;
+    renderer->rendered_actor_layout_revision = plan->level->actors.layout_revision;
+    renderer->rendered_definition = definition;
+}
+
 void unsigned_level_renderer_commit(ULevelRenderer *renderer) {
     ULevelRenderPlan *plan;
 
@@ -228,23 +247,16 @@ void unsigned_level_renderer_commit(ULevelRenderer *renderer) {
     const bool definition_changed = renderer->rendered_definition != definition;
 
     if (!hide_all && !definition_changed && !plan->frame.has_work) {
-        renderer->rendered_actor_first_sprite = plan->actor_first_sprite;
-        renderer->rendered_actor_sprite_count = plan->actor_sprite_count;
-        renderer->rendered_actor_layout_revision = plan->level->actors.layout_revision;
-        renderer->rendered_definition = definition;
+        level_renderer_publish_actor_state(renderer, plan, definition);
+        return;
+    }
+
+    if (hide_all) {
+        level_renderer_hide_committed(renderer);
         return;
     }
 
     unsigned_renderer_backend_begin();
-
-    if (hide_all) {
-        level_renderer_clear_actor_span(renderer);
-        unsigned_background_renderer_hide(&renderer->background);
-        renderer->rendered_definition = NULL;
-        renderer->actor_first_sprite = UINT16_MAX;
-        unsigned_renderer_backend_end();
-        return;
-    }
 
     level_renderer_commit_critical(plan);
 
@@ -260,10 +272,7 @@ void unsigned_level_renderer_commit(ULevelRenderer *renderer) {
 
     unsigned_renderer_backend_end();
 
-    renderer->rendered_actor_first_sprite = plan->actor_first_sprite;
-    renderer->rendered_actor_sprite_count = plan->actor_sprite_count;
-    renderer->rendered_actor_layout_revision = plan->level->actors.layout_revision;
-    renderer->rendered_definition = definition;
+    level_renderer_publish_actor_state(renderer, plan, definition);
 }
 
 const URenderFrameStats *unsigned_level_renderer_stats(const ULevelRenderer *renderer) {
@@ -286,11 +295,5 @@ void unsigned_level_renderer_hide(ULevelRenderer *renderer) {
         return;
     }
 
-    unsigned_renderer_backend_begin();
-    level_renderer_clear_actor_span(renderer);
-    unsigned_background_renderer_hide(&renderer->background);
-    unsigned_renderer_backend_end();
-
-    renderer->rendered_definition = NULL;
-    renderer->actor_first_sprite = UINT16_MAX;
+    level_renderer_hide_committed(renderer);
 }

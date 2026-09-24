@@ -1,5 +1,6 @@
 #include "save/block.h"
 
+#include "save/save_internal.h"
 #include "save/storage_internal.h"
 
 static UBlockConfig game_save_config = {
@@ -8,12 +9,6 @@ static UBlockConfig game_save_config = {
 };
 
 static u8 block_buffer[UNSIGNED_SAVE_MAX_DATA_SIZE];
-
-static void block_copy(u8 *dst, const u8 *src, u16 size) {
-    while (size-- != 0u) {
-        *dst++ = *src++;
-    }
-}
 
 static UStorageConfig block_storage_config(const UDataBlock *block_data) {
     return (UStorageConfig){
@@ -57,7 +52,7 @@ USaveState unsigned_block_read(const UDataBlock *block_data) {
         return U_SAVE_ERROR_CORRUPT;
     }
 
-    block_copy((u8 *)block_data->data, block_buffer, loaded_size);
+    unsigned_save_copy_bytes((u8 *)block_data->data, block_buffer, loaded_size);
     return U_SAVE_OK;
 }
 

@@ -44,11 +44,6 @@ void level_actor_release_pools(ULevel *level) {
     }
 }
 
-/** Append one actor from an active typed-pool slot to the shared frame view. */
-static void level_actor_append(ULevel *level, UActor *actor) {
-    level->actors.instances[level->actors.count++] = actor;
-}
-
 void level_actor_sync_pools(ULevel *level) {
     const UPoolInstanceContainer *players = &level->actor_pools->players;
     const UPoolInstanceContainer *npcs = &level->actor_pools->npcs;
@@ -74,7 +69,7 @@ void level_actor_sync_pools(ULevel *level) {
             continue;
         }
         UPlayer *player = instance->args;
-        level_actor_append(level, &player->character->actor);
+        level->actors.instances[level->actors.count++] = &player->character->actor;
     }
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(npcs); ++i) {
@@ -84,7 +79,7 @@ void level_actor_sync_pools(ULevel *level) {
             continue;
         }
         UNpc *npc = instance->args;
-        level_actor_append(level, &npc->character->actor);
+        level->actors.instances[level->actors.count++] = &npc->character->actor;
     }
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(objects); ++i) {
@@ -94,7 +89,7 @@ void level_actor_sync_pools(ULevel *level) {
             continue;
         }
         UObject *object = instance->args;
-        level_actor_append(level, &object->actor);
+        level->actors.instances[level->actors.count++] = &object->actor;
     }
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(projectiles); ++i) {
@@ -104,7 +99,7 @@ void level_actor_sync_pools(ULevel *level) {
             continue;
         }
         UProjectile *projectile = instance->args;
-        level_actor_append(level, projectile->actor);
+        level->actors.instances[level->actors.count++] = projectile->actor;
     }
 
     level->actor_sync.player_revision = players->revision;

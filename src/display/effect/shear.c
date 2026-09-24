@@ -8,10 +8,7 @@ static UEffectBounds shear_bounds(u8 column_count, const void *context) {
     const u32 x = ((u32)unsigned_effect_abs_s16(shear->amplitude_x) * span + 1u) >> 1u;
     const u32 y = ((u32)unsigned_effect_abs_s16(shear->amplitude_y) * span + 1u) >> 1u;
 
-    return (UEffectBounds){
-        .offset_x = x > UINT16_MAX ? UINT16_MAX : (u16)x,
-        .offset_y = y > UINT16_MAX ? UINT16_MAX : (u16)y,
-    };
+    return unsigned_effect_saturate_bounds(x, y);
 }
 
 static void shear_sample(UEffectSample *sample, u8 column, u8 column_count, u8 phase, const void *context) {

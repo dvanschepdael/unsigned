@@ -13,6 +13,16 @@
 
 static void sprite_renderer_hide(USprite *sprite);
 
+/** Invalidate hardware ownership and any prepared command after a layout ownership change. */
+static void sprite_renderer_invalidate_layout_state(USpriteRenderState *render) {
+    render->committed.initialized = false;
+    render->committed.chained = false;
+    render->committed.visible = false;
+    render->prepared.valid = false;
+    render->prepared.columns = NULL;
+    render->committed.graphics_valid = false;
+}
+
 #define SPRITE_RENDER_FLIP_X 0x01u
 #define SPRITE_RENDER_FLIP_Y 0x02u
 
@@ -525,12 +535,7 @@ void unsigned_sprite_renderer_relocate(USprite *sprite, u16 first_sprite) {
      */
     sprite->render.layout.first_sprite = first_sprite;
     sprite->render.layout.assigned = true;
-    sprite->render.committed.initialized = false;
-    sprite->render.committed.chained = false;
-    sprite->render.committed.visible = false;
-    sprite->render.prepared.valid = false;
-    sprite->render.prepared.columns = NULL;
-    sprite->render.committed.graphics_valid = false;
+    sprite_renderer_invalidate_layout_state(&sprite->render);
     unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_RELOCATION);
     if (!padding_valid) {
         unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_PADDING);
@@ -561,13 +566,8 @@ static void sprite_renderer_hide(USprite *sprite) {
 
 void unsigned_sprite_renderer_unassign(USprite *sprite) {
     /* CPU-only counterpart used during pre-VBlank layout compaction. */
-    sprite->render.committed.initialized = false;
-    sprite->render.committed.chained = false;
-    sprite->render.committed.visible = false;
+    sprite_renderer_invalidate_layout_state(&sprite->render);
     sprite->render.layout.assigned = false;
     sprite->render.layout.visible = false;
-    sprite->render.prepared.valid = false;
-    sprite->render.prepared.columns = NULL;
-    sprite->render.committed.graphics_valid = false;
     unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_ALL);
 }

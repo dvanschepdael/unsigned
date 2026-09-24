@@ -214,6 +214,17 @@ static void background_renderer_reset_plan(UBackgroundRenderPlan *plan) {
     }
 }
 
+/** Schedule removal of the currently committed hardware columns for one background layer. */
+static void background_renderer_plan_hide(UBackgroundLayerRenderPlan *layer_plan, const UBackgroundLayerRenderState *current, URenderPlan *frame_plan) {
+    layer_plan->hide_first_sprite = current->rendered_first_sprite;
+    layer_plan->hide_columns = current->rendered_columns;
+#if UNSIGNED_RENDERER_DIAGNOSTICS
+    unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, current->rendered_columns);
+#else
+    unsigned_render_plan_mark_work(frame_plan);
+#endif
+}
+
 void unsigned_background_renderer_init(UBackgroundRenderState *state) {
     *state = (UBackgroundRenderState){0};
     for (u8 i = 0u; i < UNSIGNED_BACKGROUND_MAX_LAYERS; ++i) {
@@ -235,13 +246,7 @@ void unsigned_background_renderer_prepare(const UBackgroundRenderState *state, c
 
         if (layer->definition == NULL) {
             if (current->rendered_definition != NULL) {
-                layer_plan->hide_first_sprite = current->rendered_first_sprite;
-                layer_plan->hide_columns = current->rendered_columns;
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-                unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, current->rendered_columns);
-#else
-                unsigned_render_plan_mark_work(frame_plan);
-#endif
+                background_renderer_plan_hide(layer_plan, current, frame_plan);
             }
             background_renderer_reset_state(next);
             continue;
@@ -253,13 +258,7 @@ void unsigned_background_renderer_prepare(const UBackgroundRenderState *state, c
         }
 
         if (current->rendered_definition != NULL && (current->rendered_definition != layer->definition || current->rendered_first_sprite != layer->definition->first_sprite || current->rendered_columns != layer_plan->columns)) {
-            layer_plan->hide_first_sprite = current->rendered_first_sprite;
-            layer_plan->hide_columns = current->rendered_columns;
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-            unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, current->rendered_columns);
-#else
-            unsigned_render_plan_mark_work(frame_plan);
-#endif
+            background_renderer_plan_hide(layer_plan, current, frame_plan);
             background_renderer_reset_state(next);
         } else if (current->rendered_definition == NULL) {
             background_renderer_invalidate_columns(next);

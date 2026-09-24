@@ -10,6 +10,7 @@
  */
 
 #include "save/save_backend.h"
+#include "save/save_internal.h"
 
 #include <ngdevkit/backup-ram.h>
 #include <ngdevkit/bios-ram.h>
@@ -18,13 +19,6 @@
 #define UNSIGNED_SYSTEM_MVS 0x80u
 
 static u8 _backup_ram bram_records[UNSIGNED_SAVE_SLOT_COUNT][UNSIGNED_SAVE_RECORD_SIZE];
-
-/** Copies between application buffers and fixed Neo Geo save records with explicit byte bounds. */
-static void save_backend_copy(u8 *dst, const u8 *src, u16 size) {
-    while (size-- != 0u) {
-        *dst++ = *src++;
-    }
-}
 
 /** Translate ngdevkit memory-card BIOS result codes into the engine save error vocabulary. */
 static USaveState save_backend_map_card_error(u8 answer) {
@@ -65,6 +59,32 @@ bool unsigned_save_backend_available(UStorage storage) {
     }
 }
 
+/** Populate the BIOS memory-card fields shared by fixed-size record reads and writes. */
+static void save_backend_prepare_card_record(u16 ngh_bcd, u8 slot, const u8 record[UNSIGNED_SAVE_RECORD_SIZE]) {
+    bios_card_fcb = ngh_bcd;
+    bios_card_sub = (u16)(1u << slot);
+    bios_card_start = (u32)(uintptr_t)record;
+    bios_card_size = UNSIGNED_SAVE_RECORD_SIZE;
+}
+
+/** Validate the mutable memory-card state shared by write and delete operations. */
+static USaveState save_backend_card_write_state(void) {
+    if (!ng_memory_card_inserted()) {
+        return U_SAVE_ERROR_NO_CARD;
+    }
+    if (ng_memory_card_write_protected()) {
+        return U_SAVE_ERROR_WRITE_PROTECTED;
+    }
+    return U_SAVE_OK;
+}
+
+/** Execute a mutating memory-card command after its BIOS fields have been prepared. */
+static USaveState save_backend_execute_card_write(void) {
+    ng_memory_card_unlock();
+    bios_card();
+    return save_backend_map_card_error(bios_card_answer);
+}
+
 USaveState unsigned_save_backend_card_exists(u16 ngh_bcd, u8 slot, bool *out_exists) {
     *out_exists = false;
     bios_card_fcb = ngh_bcd;
@@ -81,10 +101,7 @@ USaveState unsigned_save_backend_card_exists(u16 ngh_bcd, u8 slot, bool *out_exi
 USaveState unsigned_save_backend_read_record(UStorage storage, u16 ngh_bcd, u8 slot, u8 record[UNSIGNED_SAVE_RECORD_SIZE]) {
     switch (unsigned_save_backend_resolve(storage)) {
     case U_STORAGE_MEMORY_CARD:
-        bios_card_fcb = ngh_bcd;
-        bios_card_sub = (u16)(1u << slot);
-        bios_card_start = (u32)(uintptr_t)record;
-        bios_card_size = UNSIGNED_SAVE_RECORD_SIZE;
+        save_backend_prepare_card_record(ngh_bcd, slot, record);
         bios_card_command = MC_CMD_LOAD_DATA;
         bios_card();
         return save_backend_map_card_error(bios_card_answer);
@@ -93,7 +110,7 @@ USaveState unsigned_save_backend_read_record(UStorage storage, u16 ngh_bcd, u8 s
         if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {
             return U_SAVE_ERROR_UNSUPPORTED;
         }
-        save_backend_copy(record, bram_records[slot], UNSIGNED_SAVE_RECORD_SIZE);
+        unsigned_save_copy_bytes(record, bram_records[slot], UNSIGNED_SAVE_RECORD_SIZE);
         return U_SAVE_OK;
 
     default:
@@ -103,28 +120,22 @@ USaveState unsigned_save_backend_read_record(UStorage storage, u16 ngh_bcd, u8 s
 
 USaveState unsigned_save_backend_write_record(UStorage storage, u16 ngh_bcd, u8 slot, const u8 record[UNSIGNED_SAVE_RECORD_SIZE]) {
     switch (unsigned_save_backend_resolve(storage)) {
-    case U_STORAGE_MEMORY_CARD:
-        if (!ng_memory_card_inserted()) {
-            return U_SAVE_ERROR_NO_CARD;
-        }
-        if (ng_memory_card_write_protected()) {
-            return U_SAVE_ERROR_WRITE_PROTECTED;
+    case U_STORAGE_MEMORY_CARD: {
+        const USaveState state = save_backend_card_write_state();
+        if (state != U_SAVE_OK) {
+            return state;
         }
 
-        bios_card_fcb = ngh_bcd;
-        bios_card_sub = (u16)(1u << slot);
-        bios_card_start = (u32)(uintptr_t)record;
-        bios_card_size = UNSIGNED_SAVE_RECORD_SIZE;
+        save_backend_prepare_card_record(ngh_bcd, slot, record);
         bios_card_command = MC_CMD_SAVE_DATA;
-        ng_memory_card_unlock();
-        bios_card();
-        return save_backend_map_card_error(bios_card_answer);
+        return save_backend_execute_card_write();
+    }
 
     case U_STORAGE_BACKUP_RAM:
         if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {
             return U_SAVE_ERROR_UNSUPPORTED;
         }
-        save_backend_copy(bram_records[slot], record, UNSIGNED_SAVE_RECORD_SIZE);
+        unsigned_save_copy_bytes(bram_records[slot], record, UNSIGNED_SAVE_RECORD_SIZE);
         return U_SAVE_OK;
 
     default:
@@ -134,20 +145,17 @@ USaveState unsigned_save_backend_write_record(UStorage storage, u16 ngh_bcd, u8 
 
 USaveState unsigned_save_backend_delete_record(UStorage storage, u16 ngh_bcd, u8 slot) {
     switch (unsigned_save_backend_resolve(storage)) {
-    case U_STORAGE_MEMORY_CARD:
-        if (!ng_memory_card_inserted()) {
-            return U_SAVE_ERROR_NO_CARD;
-        }
-        if (ng_memory_card_write_protected()) {
-            return U_SAVE_ERROR_WRITE_PROTECTED;
+    case U_STORAGE_MEMORY_CARD: {
+        const USaveState state = save_backend_card_write_state();
+        if (state != U_SAVE_OK) {
+            return state;
         }
 
         bios_card_fcb = ngh_bcd;
         bios_card_sub = (u16)(1u << slot);
         bios_card_command = MC_CMD_DELETE_DATA;
-        ng_memory_card_unlock();
-        bios_card();
-        return save_backend_map_card_error(bios_card_answer);
+        return save_backend_execute_card_write();
+    }
 
     case U_STORAGE_BACKUP_RAM:
         if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {

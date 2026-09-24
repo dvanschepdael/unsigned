@@ -10,7 +10,6 @@ UPlayerPoolInstance *unsigned_player_pool_reserve(UPoolInstanceContainer *pool, 
 
     player->controller_index = controller_index;
     instance->args = player;
-    instance->elapsed = 0;
 
     return instance;
 }

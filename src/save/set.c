@@ -1,5 +1,7 @@
 #include "save/set.h"
 
+#include "save/save_internal.h"
+
 #define UNSIGNED_SAVE_SET_MARKER 0xa5u
 #define UNSIGNED_SAVE_SET_MARKER_OFFSET 0u
 #define UNSIGNED_SAVE_SET_GENERATION_OFFSET 1u
@@ -10,21 +12,6 @@
 /* Reads are staged here so corrupt/mixed generations never partially overwrite user data. */
 static u8 set_staging[UNSIGNED_SAVE_SET_MAX_DATA_SIZE];
 static u8 set_record[UNSIGNED_SAVE_MAX_DATA_SIZE];
-
-static void set_write_u16_be(u8 *dst, u16 value) {
-    dst[0] = (u8)(value >> 8);
-    dst[1] = (u8)value;
-}
-
-static u16 set_read_u16_be(const u8 *src) {
-    return (u16)(((u16)src[0] << 8) | (u16)src[1]);
-}
-
-static void set_copy(u8 *dst, const u8 *src, u32 size) {
-    while (size-- != 0u) {
-        *dst++ = *src++;
-    }
-}
 
 u8 unsigned_set_block_count(const UDataSet *set) {
     return (u8)(((set->size - 1u) / (u32)UNSIGNED_SAVE_SET_BLOCK_DATA_SIZE) + 1u);
@@ -54,10 +41,10 @@ static void set_build_record(const UDataSet *set, u8 block_index, u8 block_count
     const u32 offset = (u32)block_index * (u32)UNSIGNED_SAVE_SET_BLOCK_DATA_SIZE;
 
     set_record[UNSIGNED_SAVE_SET_MARKER_OFFSET] = UNSIGNED_SAVE_SET_MARKER;
-    set_write_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET], generation);
+    unsigned_save_write_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET], generation);
     set_record[UNSIGNED_SAVE_SET_BLOCK_INDEX_OFFSET] = block_index;
     set_record[UNSIGNED_SAVE_SET_BLOCK_COUNT_OFFSET] = block_count;
-    set_copy(&set_record[UNSIGNED_SAVE_SET_PAYLOAD_OFFSET], ((const u8 *)set->data) + offset, payload_size);
+    unsigned_save_copy_bytes(&set_record[UNSIGNED_SAVE_SET_PAYLOAD_OFFSET], ((const u8 *)set->data) + offset, payload_size);
 }
 
 /** Validate metadata read from storage, not caller-authored set configuration. */
@@ -78,7 +65,7 @@ static USaveState set_read_record(const UDataSet *set, u8 block_index, u8 block_
         return U_SAVE_ERROR_CORRUPT;
     }
 
-    const u16 generation = set_read_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET]);
+    const u16 generation = unsigned_save_read_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET]);
     if (block_index == 0u) {
         *inout_generation = generation;
     } else if (generation != *inout_generation) {
@@ -110,7 +97,7 @@ static USaveState set_next_generation(const UDataSet *set, u8 block_count, u16 *
 
         if (result == U_SAVE_OK) {
             if (set_record_header_is_valid(i, block_count)) {
-                generations[generation_count++] = set_read_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET]);
+                generations[generation_count++] = unsigned_save_read_u16_be(&set_record[UNSIGNED_SAVE_SET_GENERATION_OFFSET]);
             }
             continue;
         }
@@ -190,10 +177,10 @@ USaveState unsigned_set_read(const UDataSet *set) {
             return result;
         }
 
-        set_copy(&set_staging[offset], &set_record[UNSIGNED_SAVE_SET_PAYLOAD_OFFSET], payload_size);
+        unsigned_save_copy_bytes(&set_staging[offset], &set_record[UNSIGNED_SAVE_SET_PAYLOAD_OFFSET], payload_size);
     }
 
-    set_copy((u8 *)set->data, set_staging, set->size);
+    unsigned_save_copy_bytes((u8 *)set->data, set_staging, set->size);
     return U_SAVE_OK;
 }
 

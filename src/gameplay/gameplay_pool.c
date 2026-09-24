@@ -33,6 +33,15 @@ void unsigned_gameplay_pool_release(UPoolInstanceContainer *pool, UPoolInstance 
     }
 }
 
+/** Route one release through the optional owner hook or the default gameplay lifetime. */
+static void gameplay_pool_release_instance(UPoolInstanceContainer *pool, UPoolInstance *instance, UGameplayPoolReleaseFunction release_function, void *release_context) {
+    if (release_function != NULL) {
+        release_function(release_context, instance);
+    } else {
+        unsigned_gameplay_pool_release(pool, instance);
+    }
+}
+
 void unsigned_gameplay_pool_clear(UPoolInstanceContainer *pool, UGameplayPoolReleaseFunction release_function, void *release_context) {
     for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
@@ -40,11 +49,7 @@ void unsigned_gameplay_pool_clear(UPoolInstanceContainer *pool, UGameplayPoolRel
             continue;
         }
 
-        if (release_function != NULL) {
-            release_function(release_context, instance);
-        } else {
-            unsigned_gameplay_pool_release(pool, instance);
-        }
+        gameplay_pool_release_instance(pool, instance, release_function, release_context);
     }
 }
 
@@ -65,11 +70,7 @@ void unsigned_gameplay_pool_tick(UPoolInstanceContainer *pool, UGameplayPoolRele
         const bool completed = object->complete != NULL && object->complete(args);
 
         if (completed) {
-            if (release_function != NULL) {
-                release_function(release_context, instance);
-            } else {
-                unsigned_gameplay_pool_release(pool, instance);
-            }
+            gameplay_pool_release_instance(pool, instance, release_function, release_context);
             continue;
         }
 
@@ -78,10 +79,6 @@ void unsigned_gameplay_pool_tick(UPoolInstanceContainer *pool, UGameplayPoolRele
             continue;
         }
 
-        if (release_function != NULL) {
-            release_function(release_context, instance);
-        } else {
-            unsigned_gameplay_pool_release(pool, instance);
-        }
+        gameplay_pool_release_instance(pool, instance, release_function, release_context);
     }
 }

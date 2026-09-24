@@ -26,6 +26,23 @@ static bool sprite_animation_can_batch(const UAnimation *animation) {
     return true;
 }
 
+/** Select one authored animation frame and publish the common playback/render metadata. */
+static void sprite_select_frame(USprite *sprite, const UAnimation *animation, u8 animation_index, u8 frame_index) {
+    const UFrame *frame = &animation->frames[frame_index];
+    const bool frame_changed = sprite->current_frame != frame;
+
+    sprite->animation_index = animation_index;
+    sprite->frame_index = frame_index;
+    sprite->current_animation = animation;
+    sprite->current_frame = frame;
+    sprite->frame_ticks = 0u;
+    sprite->batchable_animation = sprite_animation_can_batch(animation);
+    sprite_playback_revision_advance(sprite);
+    if (frame_changed) {
+        unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_TILES);
+    }
+}
+
 const UFrame *unsigned_sprite_current_frame(const USprite *sprite) {
     return sprite->current_frame;
 }
@@ -70,39 +87,15 @@ void unsigned_sprite_init(USprite *sprite, const USpriteDefinition *definition, 
 
 void unsigned_sprite_play(USprite *sprite, u8 animation_index, UAnimationPlayback playback) {
     const UAnimation *animation = &sprite->definition->animations->instances[animation_index];
-    const UFrame *frame = &animation->frames[0];
-    const bool frame_changed = sprite->current_frame != frame;
-
-    sprite->animation_index = animation_index;
-    sprite->frame_index = 0u;
-    sprite->current_animation = animation;
-    sprite->current_frame = frame;
-    sprite->frame_ticks = 0u;
+    sprite_select_frame(sprite, animation, animation_index, 0u);
     sprite->playback = playback;
     sprite->state = U_SPRITE_PLAYING;
-    sprite->batchable_animation = sprite_animation_can_batch(animation);
-    sprite_playback_revision_advance(sprite);
-    if (frame_changed) {
-        unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_TILES);
-    }
 }
 
 void unsigned_sprite_set_static_frame(USprite *sprite, u8 animation_index, u8 frame_index) {
     const UAnimation *animation = &sprite->definition->animations->instances[animation_index];
-    const UFrame *frame = &animation->frames[frame_index];
-    const bool frame_changed = sprite->current_frame != frame;
-
-    sprite->animation_index = animation_index;
-    sprite->frame_index = frame_index;
-    sprite->current_animation = animation;
-    sprite->current_frame = frame;
-    sprite->frame_ticks = 0u;
+    sprite_select_frame(sprite, animation, animation_index, frame_index);
     sprite->state = U_SPRITE_STOPPED;
-    sprite->batchable_animation = sprite_animation_can_batch(animation);
-    sprite_playback_revision_advance(sprite);
-    if (frame_changed) {
-        unsigned_sprite_render_mark_dirty(&sprite->render, U_SPRITE_RENDER_DIRTY_TILES);
-    }
 }
 
 void unsigned_sprite_set_flip_x(USprite *sprite, bool flip_x) {

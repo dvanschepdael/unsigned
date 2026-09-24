@@ -20,9 +20,14 @@ static volatile UNeoGeoBiosRequest neo_geo_runtime_request = U_NEO_GEO_BIOS_REQU
 static volatile u8 neo_geo_runtime_binding_state = U_NEO_GEO_RUNTIME_UNBOUND;
 static const UNeoGeoRuntimeDefinition *neo_geo_runtime_definition;
 
-void neo_geo_bios_callbacks_init(USoundCommand coin_sound_command, UNeoGeoBiosRequest request) {
+/** Clear the runtime binding shared by initialization and shutdown. */
+static void neo_geo_bios_unbind_runtime(void) {
     neo_geo_runtime_binding_state = U_NEO_GEO_RUNTIME_UNBOUND;
     neo_geo_runtime_definition = NULL;
+}
+
+void neo_geo_bios_callbacks_init(USoundCommand coin_sound_command, UNeoGeoBiosRequest request) {
+    neo_geo_bios_unbind_runtime();
     neo_geo_runtime_request = request;
     neo_geo_coin_sound_command = coin_sound_command;
     neo_geo_credits_init();
@@ -38,8 +43,7 @@ void neo_geo_bios_enable_start_requests(void) {
 }
 
 void neo_geo_bios_end_runtime(void) {
-    neo_geo_runtime_binding_state = U_NEO_GEO_RUNTIME_UNBOUND;
-    neo_geo_runtime_definition = NULL;
+    neo_geo_bios_unbind_runtime();
 }
 
 static bool neo_geo_bios_forced_start_handoff_pending(void) {

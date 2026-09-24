@@ -9,7 +9,6 @@ UObjectPoolInstance *unsigned_object_pool_reserve(UPoolInstanceContainer *pool, 
     UObjectPoolInstance *instance = unsigned_pool_reserve(pool);
 
     instance->args = object;
-    instance->elapsed = 0;
 
     return instance;
 }

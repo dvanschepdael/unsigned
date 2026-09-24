@@ -14,6 +14,13 @@ static inline u16 unsigned_effect_abs_s16(s16 value) {
     return (u16)wide;
 }
 
+static inline UEffectBounds unsigned_effect_saturate_bounds(u32 x, u32 y) {
+    return (UEffectBounds){
+        .offset_x = x > UINT16_MAX ? UINT16_MAX : (u16)x,
+        .offset_y = y > UINT16_MAX ? UINT16_MAX : (u16)y,
+    };
+}
+
 static inline UEffectBounds unsigned_effect_zero_bounds(u8 column_count, const void *context) {
     (void)column_count;
     (void)context;

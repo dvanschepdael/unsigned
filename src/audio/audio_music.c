@@ -6,6 +6,14 @@ static void unsigned_audio_music_reset_player(UAudioMusicPlayer *player) {
     player->requested_state = U_AUDIO_MUSIC_STATE_NONE;
 }
 
+/** Enter the requested authored state and return the command that starts it. */
+static USoundCommand unsigned_audio_music_enter_requested(UAudioMusicPlayer *player, const UAudioMusic *music) {
+    const USoundCommand command = music->states[player->requested_state].command;
+    player->current_state = player->requested_state;
+    player->transition_tick = 0u;
+    return command;
+}
+
 void unsigned_audio_music_play(UAudioManager *audio, const UAudioMusic *music) {
     unsigned_audio_music_reset_player(&audio->music);
     audio->music.definition = music;
@@ -36,10 +44,7 @@ USoundCommand unsigned_audio_music_tick(UAudioManager *audio) {
     }
 
     if (player->current_state == U_AUDIO_MUSIC_STATE_NONE) {
-        const USoundCommand command = music->states[player->requested_state].command;
-        player->current_state = player->requested_state;
-        player->transition_tick = 0u;
-        return command;
+        return unsigned_audio_music_enter_requested(player, music);
     }
 
     const UAudioMusicState *current = &music->states[player->current_state];
@@ -57,8 +62,5 @@ USoundCommand unsigned_audio_music_tick(UAudioManager *audio) {
         return U_AUDIO_COMMAND_NONE;
     }
 
-    const USoundCommand command = music->states[player->requested_state].command;
-    player->current_state = player->requested_state;
-    player->transition_tick = 0u;
-    return command;
+    return unsigned_audio_music_enter_requested(player, music);
 }

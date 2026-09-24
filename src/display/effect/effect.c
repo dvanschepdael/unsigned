@@ -6,6 +6,7 @@
 #include "display/effect/effect.h"
 
 #include "core/math/math.h"
+#include "display/effect/effect_internal.h"
 
 void unsigned_effect_set_advanced(UEffect *effect, UEffectFunction function, const void *context, u8 speed, UEffectLayout layout, UEffectBoundsFunction bounds) {
     *effect = (UEffect){
@@ -108,8 +109,5 @@ UEffectBounds unsigned_effect_add_bounds(UEffectBounds first, UEffectBounds seco
     const u32 x = (u32)first.offset_x + second.offset_x;
     const u32 y = (u32)first.offset_y + second.offset_y;
 
-    return (UEffectBounds){
-        .offset_x = x > UINT16_MAX ? UINT16_MAX : (u16)x,
-        .offset_y = y > UINT16_MAX ? UINT16_MAX : (u16)y,
-    };
+    return unsigned_effect_saturate_bounds(x, y);
 }

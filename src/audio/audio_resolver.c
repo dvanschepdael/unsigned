@@ -5,20 +5,11 @@
 
 #include "audio/audio_resolver_internal.h"
 #include "audio/config.h"
-
-/** Advances the deterministic audio pseudo-random generator and returns the next value. */
-static u16 audio_random(u16 *state) {
-    u16 value = *state;
-    value ^= (u16)(value << 7u);
-    value ^= (u16)(value >> 9u);
-    value ^= (u16)(value << 8u);
-    *state = value;
-    return value;
-}
+#include "core/math/math.h"
 
 /** Selects a uniformly random audio command variant. */
 static u8 audio_select_random(u8 variant_count, u16 *random_state) {
-    return (u8)(audio_random(random_state) % variant_count);
+    return (u8)(unsigned_math_random_u16(random_state) % variant_count);
 }
 
 /** Selects a random audio variant while avoiding the previous choice when possible. */
@@ -27,7 +18,7 @@ static u8 audio_select_random_no_repeat(u8 variant_count, UAudioSelectionState *
         return audio_select_random(variant_count, random_state);
     }
 
-    u8 selected = (u8)(audio_random(random_state) % (variant_count - 1u));
+    u8 selected = (u8)(unsigned_math_random_u16(random_state) % (variant_count - 1u));
     if (selected >= state->previous_index) {
         ++selected;
     }
@@ -41,7 +32,7 @@ static u8 audio_select_weighted(const UAudioVariant *variants, u8 variant_count,
     for (u8 i = 0u; i < variant_count; ++i) {
         total = (u16)(total + variants[i].weight);
     }
-    u16 selected_weight = (u16)(audio_random(random_state) % total);
+    u16 selected_weight = (u16)(unsigned_math_random_u16(random_state) % total);
     for (u8 i = 0u; i < variant_count; ++i) {
         if (selected_weight < variants[i].weight) {
             return i;
@@ -74,7 +65,7 @@ static u8 audio_select_shuffle(u8 variant_count, UAudioSelectionState *state, u1
             ++remaining_count;
         }
     }
-    u8 selected_remaining = (u8)(audio_random(random_state) % remaining_count);
+    u8 selected_remaining = (u8)(unsigned_math_random_u16(random_state) % remaining_count);
     bit = 1u;
     for (u8 i = 0u; i < variant_count; ++i, bit = (u16)(bit << 1u)) {
         if ((selection_mask & bit) == 0u) {

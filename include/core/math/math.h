@@ -69,6 +69,21 @@ u16 unsigned_math_lerp_u16(u16 from, u16 to, u16 position, u16 duration);
 s16 unsigned_math_saturate_s16(s32 value);
 
 /**
+ * @brief Advance a deterministic 16-bit xorshift pseudo-random state.
+ *
+ * The caller owns the seed/state so subsystems remain deterministic and independent.
+ * @pre `state` is valid.
+ */
+static inline u16 unsigned_math_random_u16(u16 *state) {
+    u16 value = *state;
+    value ^= (u16)(value << 7u);
+    value ^= (u16)(value >> 9u);
+    value ^= (u16)(value << 8u);
+    *state = value;
+    return value;
+}
+
+/**
  * @brief Divides a signed 32-bit value by 2^shift with C99 truncation toward zero.
  *
  * This avoids target integer-division instructions on fixed-point hot paths while preserving

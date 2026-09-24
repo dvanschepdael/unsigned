@@ -10,7 +10,6 @@ UNpcPoolInstance *unsigned_npc_pool_reserve(UPoolInstanceContainer *pool, UNpc *
 
     unsigned_npc_init(npc);
     instance->args = npc;
-    instance->elapsed = 0u;
     return instance;
 }
 

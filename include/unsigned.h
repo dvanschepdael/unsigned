@@ -129,6 +129,7 @@
 #include <save/block.h>
 #include <save/save.h>
 #include <save/save_backend.h>
+#include <save/save_internal.h>
 #include <save/save_record_internal.h>
 #include <save/set.h>
 #include <save/storage.h>

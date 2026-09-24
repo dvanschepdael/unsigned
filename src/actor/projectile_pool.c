@@ -15,7 +15,6 @@ UProjectilePoolInstance *unsigned_projectile_pool_reserve(UPoolInstanceContainer
     unsigned_actor_collision_state_reset(&projectile->actor->collision);
     projectile->actor->collision.resolve_immediately = true;
     projectile->collision_latched = false;
-    instance->object = projectile;
     instance->args = projectile;
     instance->elapsed = 0u;
     return instance;

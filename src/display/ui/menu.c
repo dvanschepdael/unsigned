@@ -51,57 +51,18 @@ static void unsigned_ui_menu_set_focus(UUIMenu *menu, u8 index) {
 
 /** Repairs menu focus after structural or enabled/visible state changes. */
 static void unsigned_ui_menu_repair_focus(UUIMenu *menu) {
-    u8 index;
-
     if (menu->count == 0) {
         return;
     }
 
     if (menu->focused_index != UINT8_MAX && unsigned_ui_element_can_focus(menu->items[menu->focused_index])) {
-        menu->items[menu->focused_index]->focused = true;
         return;
     }
 
-    if (menu->focused_index != UINT8_MAX) {
-        menu->items[menu->focused_index]->focused = false;
-    }
-    menu->focused_index = UINT8_MAX;
-    if (unsigned_ui_menu_find_next(menu, (u8)(menu->count - 1), true, &index)) {
-        unsigned_ui_menu_set_focus(menu, index);
-    }
+    unsigned_ui_menu_clear_focus(menu);
+    unsigned_ui_menu_focus_first(menu);
 }
 
-/** Routes confirm/value-change input to the focused widget according to its element type. */
-static void unsigned_ui_menu_activate_focused(UUIMenu *menu, const UUIInput *input) {
-    if (menu->focused_index == UINT8_MAX) {
-        return;
-    }
-
-    UUIElement *element = menu->items[menu->focused_index];
-    if (!unsigned_ui_element_can_focus(element)) {
-        return;
-    }
-
-    switch (element->type) {
-    case U_UI_ELEMENT_BUTTON:
-        if (input->confirm_pressed) {
-            unsigned_ui_button_press((UUIButton *)element);
-        }
-        break;
-
-    case U_UI_ELEMENT_SELECTOR:
-        if (input->value_previous_pressed) {
-            unsigned_ui_selector_previous((UUISelector *)element);
-        }
-        if (input->value_next_pressed) {
-            unsigned_ui_selector_next((UUISelector *)element);
-        }
-        break;
-
-    default:
-        U_UNREACHABLE();
-    }
-}
 
 #pragma endregion
 
@@ -125,16 +86,13 @@ void unsigned_ui_menu_remove(UUIMenu *menu, UUIElement *element) {
         ++index;
     }
 
-    if (menu->focused_index != UINT8_MAX) {
-        menu->items[menu->focused_index]->focused = false;
-    }
+    unsigned_ui_menu_clear_focus(menu);
     element->focused = false;
     for (u8 i = index; i + 1u < menu->count; ++i) {
         menu->items[i] = menu->items[i + 1u];
     }
 
     --menu->count;
-    menu->focused_index = UINT8_MAX;
     unsigned_ui_menu_repair_focus(menu);
 }
 
@@ -175,17 +133,36 @@ void unsigned_ui_menu_update(UUIMenu *menu, const UUIInput *input) {
 
     unsigned_ui_menu_repair_focus(menu);
 
-    if (menu->focused_index != UINT8_MAX && input->navigate_previous_pressed) {
-        if (unsigned_ui_menu_find_next(menu, menu->focused_index, false, &next_index)) {
-            unsigned_ui_menu_set_focus(menu, next_index);
+    if (menu->focused_index != UINT8_MAX) {
+        if (input->navigate_previous_pressed) {
+            if (unsigned_ui_menu_find_next(menu, menu->focused_index, false, &next_index)) {
+                unsigned_ui_menu_set_focus(menu, next_index);
+            }
+        } else if (input->navigate_next_pressed) {
+            if (unsigned_ui_menu_find_next(menu, menu->focused_index, true, &next_index)) {
+                unsigned_ui_menu_set_focus(menu, next_index);
+            }
         }
-    } else if (menu->focused_index != UINT8_MAX && input->navigate_next_pressed) {
-        if (unsigned_ui_menu_find_next(menu, menu->focused_index, true, &next_index)) {
-            unsigned_ui_menu_set_focus(menu, next_index);
+
+        UUIElement *element = menu->items[menu->focused_index];
+        switch (element->type) {
+            case U_UI_ELEMENT_BUTTON:
+                if (input->confirm_pressed) {
+                    unsigned_ui_button_press((UUIButton *)element);
+                }
+                break;
+            case U_UI_ELEMENT_SELECTOR:
+                if (input->value_previous_pressed) {
+                    unsigned_ui_selector_previous((UUISelector *)element);
+                }
+                if (input->value_next_pressed) {
+                    unsigned_ui_selector_next((UUISelector *)element);
+                }
+                break;
+            default:
+                U_UNREACHABLE();
         }
     }
-
-    unsigned_ui_menu_activate_focused(menu, input);
 
     if (input->cancel_pressed && menu->on_cancel != NULL) {
         menu->on_cancel(menu->cancel_context);
