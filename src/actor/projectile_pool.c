@@ -28,18 +28,12 @@ void unsigned_projectile_pool_release(UPoolInstanceContainer *pool, UProjectileP
 }
 
 void unsigned_projectile_pool_tick(UPoolInstanceContainer *pool) {
-    if (pool->count == 0u) {
-        return;
-    }
-
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UProjectilePoolInstance *instance = &pool->instances[i];
         if (!instance->active) {
             continue;
         }
 
-        --remaining;
         UProjectile *projectile = instance->args;
         unsigned_physics_trajectory_tick(&projectile->trajectory, projectile->trajectory_function, projectile->trajectory_context);
         unsigned_physics_trajectory_project(&projectile->trajectory, projectile->projection, projectile->projection_origin, &projectile->ground_position, &projectile->visual_position);

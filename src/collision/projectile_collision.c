@@ -50,19 +50,13 @@ static bool collision_projectile_hits_actor(const UCollisionActorIndex *actors, 
 }
 
 void unsigned_collision_projectiles_resolve(UCollisionManager *collisions, const UCollisionActorIndex *actors, UPoolInstanceContainer *projectiles, const UTLSS *tlss) {
-    if (projectiles->count == 0u) {
-        return;
-    }
-
-    u8 remaining = projectiles->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(projectiles) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(projectiles); ++i) {
         UProjectilePoolInstance *instance = &projectiles->instances[i];
         const Vec2 *collision_position;
 
         if (!instance->active) {
             continue;
         }
-        --remaining;
 
         UProjectile *projectile = instance->args;
         collision_position = projectile->collision_on_ground ? &projectile->ground_position : &projectile->visual_position;

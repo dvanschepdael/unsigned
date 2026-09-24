@@ -38,45 +38,42 @@ static void level_camera_constrain_players(ULevel *level, const UViewport *viewp
         .max_y = unsigned_math_saturate_s16((s32)viewport->camera->y + viewport->height - 1),
     };
 
-    u8 remaining = players->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(players) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(players); ++i) {
         UPoolInstance *instance = &players->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UPlayer *player = instance->args;
         unsigned_physics_movement_constrain(&player->character->actor.position, &bounds);
     }
 }
 
-/** Build the inclusive player-origin extent used by the multiplayer follow policy. */
+/** Build the inclusive player-origin extent used by the multiplayer follow policy.
+ * @pre The player pool contains at least one active player.
+ */
 static ULevelPlayerExtent level_camera_player_extent(ULevel *level) {
-    ULevelPlayerExtent extent = {0};
     UPoolInstanceContainer *players = &level->actor_pools->players;
+    const u8 end = unsigned_pool_iteration_end(players);
+    const UPlayer *last_player = players->instances[end - 1u].args;
+    const Vec2 last_position = last_player->character->actor.position;
+    ULevelPlayerExtent extent = {
+        .min_x = last_position.x,
+        .max_x = last_position.x,
+        .min_y = last_position.y,
+        .max_y = last_position.y,
+    };
 
-    u8 remaining = players->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(players) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i + 1u < end; ++i) {
         const UPoolInstance *instance = &players->instances[i];
         if (!instance->active) {
             continue;
         }
         const UPlayer *player = instance->args;
         const Vec2 position = player->character->actor.position;
-        if (remaining == players->count) {
-            extent = (ULevelPlayerExtent){
-                .min_x = position.x,
-                .max_x = position.x,
-                .min_y = position.y,
-                .max_y = position.y,
-            };
-        } else {
-            extent.min_x = unsigned_math_min_s16(extent.min_x, position.x);
-            extent.max_x = unsigned_math_max_s16(extent.max_x, position.x);
-            extent.min_y = unsigned_math_min_s16(extent.min_y, position.y);
-            extent.max_y = unsigned_math_max_s16(extent.max_y, position.y);
-        }
-        --remaining;
+        extent.min_x = unsigned_math_min_s16(extent.min_x, position.x);
+        extent.max_x = unsigned_math_max_s16(extent.max_x, position.x);
+        extent.min_y = unsigned_math_min_s16(extent.min_y, position.y);
+        extent.max_y = unsigned_math_max_s16(extent.max_y, position.y);
     }
 
     return extent;

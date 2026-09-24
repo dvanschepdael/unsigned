@@ -15,10 +15,6 @@ void unsigned_timer_pool_init(UTimerPool *timers, u8 frames_per_second) {
 }
 
 void unsigned_timer_pool_clear(UTimerPool *timers) {
-    if (timers->pool.count == 0u) {
-        return;
-    }
-
     for (u8 i = 0u; i < unsigned_pool_iteration_end(&timers->pool); ++i) {
         if (timers->pool.instances[i].active) {
             unsigned_pool_release(&timers->pool, &timers->pool.instances[i]);
@@ -41,10 +37,6 @@ void unsigned_timer_pool_release(UTimerPool *timers, UTimerPoolInstance *instanc
 }
 
 void unsigned_timer_pool_tick(UTimerPool *timers) {
-    if (timers->pool.count == 0u) {
-        return;
-    }
-
     for (u8 i = 0u; i < unsigned_pool_iteration_end(&timers->pool); ++i) {
         UTimerPoolInstance *instance = &timers->pool.instances[i];
         if (!instance->active) {

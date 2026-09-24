@@ -22,18 +22,12 @@ void unsigned_object_pool_release(UPoolInstanceContainer *pool, UObjectPoolInsta
 }
 
 void unsigned_object_pool_tick(UPoolInstanceContainer *pool) {
-    if (pool->count == 0u) {
-        return;
-    }
-
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UObjectPoolInstance *instance = &pool->instances[i];
 
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UObject *object = instance->args;
         unsigned_actor_tick(&object->actor);
     }

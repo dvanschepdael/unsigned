@@ -18,20 +18,19 @@ void unsigned_pool_init(UPoolInstanceContainer *pool) {
 }
 
 UPoolInstance *unsigned_pool_reserve(UPoolInstanceContainer *pool) {
-    u8 index = pool->active_span;
+    u8 index;
 
-    /* Stable physical indices may leave holes. Search only the live span, then append the first
-     * trailing slot. This avoids scanning the unused tail of a mostly dense pool. */
-    for (u8 i = 0u; i < pool->active_span; ++i) {
-        if (!pool->instances[i].active) {
-            index = i;
-            break;
+    /* A dense span has no holes, so append directly instead of scanning every live slot. */
+    if (pool->count == pool->active_span) {
+        index = pool->active_span++;
+    } else {
+        /* A sparse live span contains at least one inactive slot by construction. */
+        index = 0u;
+        while (pool->instances[index].active) {
+            ++index;
         }
     }
 
-    if (index == pool->active_span) {
-        ++pool->active_span;
-    }
     UPoolInstance *instance = &pool->instances[index];
 
     ++instance->generation;
@@ -57,10 +56,6 @@ void unsigned_pool_release(UPoolInstanceContainer *pool, UPoolInstance *instance
 }
 
 UPoolInstance *unsigned_pool_find_by_key(UPoolInstanceContainer *pool, u16 key) {
-    if (pool->count == 0u) {
-        return NULL;
-    }
-
     for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (instance->active && instance->key == key) {

@@ -37,7 +37,7 @@ typedef struct UPoolInstance {
 typedef struct UPoolInstanceContainer {
     u8 count;
     u8 capacity;
-    /** One past the highest active physical slot; bounds hot iterations without changing stable indices. */
+    /** One past the highest active physical slot; zero when empty. Bounds hot iterations without changing stable indices. */
     u8 active_span;
     /** Increments whenever active membership changes through reserve/release. */
     u16 revision;
@@ -53,7 +53,7 @@ typedef struct UPoolInstanceContainer {
  * @pre `pool` was initialized with unsigned_pool_init() and has not been structurally modified by callers.
  */
 static inline u8 unsigned_pool_iteration_end(const UPoolInstanceContainer *pool) {
-    return pool->count == 0u ? 0u : pool->active_span;
+    return pool->active_span;
 }
 
 /**

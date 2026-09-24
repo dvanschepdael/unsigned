@@ -23,18 +23,12 @@ void unsigned_player_pool_release(UPoolInstanceContainer *pool, UAbilityPool *ab
 }
 
 void unsigned_player_pool_tick(UPoolInstanceContainer *pool, UInputManager *input, UAbilityPool *abilities) {
-    if (pool->count == 0u) {
-        return;
-    }
-
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPlayerPoolInstance *instance = &pool->instances[i];
 
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UPlayer *player = instance->args;
         unsigned_player_tick_input(player, &input->players[player->controller_index], abilities);
         unsigned_actor_tick(&player->character->actor);

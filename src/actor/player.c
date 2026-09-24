@@ -46,18 +46,13 @@ static bool player_binding_instance_is_current(const UGameplayAbilityBinding *bi
     return instance->active && instance->generation == binding->active_generation;
 }
 
-/** Drops the cached ability-slot handle without touching the ability pool. */
-static void player_binding_clear_instance(UGameplayAbilityBinding *binding) {
-    binding->active_instance = NULL;
-}
-
 /** Releases the cached active ability when still valid, then clears the binding handle. */
 static void player_binding_release_instance(UGameplayAbilityBinding *binding, UAbilityPool *abilities) {
     if (player_binding_instance_is_current(binding)) {
         unsigned_gameplay_ability_pool_release(abilities, binding->active_instance);
     }
 
-    player_binding_clear_instance(binding);
+    binding->active_instance = NULL;
 }
 
 void unsigned_player_tick_input(UPlayer *player, UInputController *controller, UAbilityPool *abilities) {
@@ -76,7 +71,7 @@ void unsigned_player_tick_input(UPlayer *player, UInputController *controller, U
         bool continuous = binding->trigger == U_INPUT_TRIGGER_DOWN;
 
         if (binding->active_instance != NULL && !player_binding_instance_is_current(binding)) {
-            player_binding_clear_instance(binding);
+            binding->active_instance = NULL;
         }
 
         if (continuous && !matches) {
@@ -108,10 +103,8 @@ void unsigned_player_tick_input(UPlayer *player, UInputController *controller, U
 }
 
 void unsigned_player_destroy(UPlayer *player, UAbilityPool *abilities) {
-    if (player->bindings->count != 0u) {
-        for (u8 i = 0u; i < player->bindings->count; ++i) {
-            player_binding_release_instance(&player->bindings->instances[i], abilities);
-        }
+    for (u8 i = 0u; i < player->bindings->count; ++i) {
+        player_binding_release_instance(&player->bindings->instances[i], abilities);
     }
 
     player->input_state = NULL;

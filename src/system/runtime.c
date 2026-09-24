@@ -12,10 +12,6 @@
 
 static bool neo_geo_attract_ended = true;
 
-static UNeoGeoBiosRequest neo_geo_bios_request(void) {
-    return bios_user_request <= U_NEO_GEO_BIOS_REQUEST_TITLE ? (UNeoGeoBiosRequest)bios_user_request : U_NEO_GEO_BIOS_REQUEST_INVALID;
-}
-
 /**
  * Bootstrap one ngdevkit C entry before any potentially long project initialization.
  *
@@ -83,6 +79,7 @@ static void neo_geo_frame(const UNeoGeoRuntimeDefinition *definition, UNeoGeoPha
     if (definition->render != NULL) {
         definition->render(definition->context);
     }
+
     if (definition->render_phase != NULL) {
         definition->render_phase(definition->context, phase);
     }
@@ -99,11 +96,13 @@ static void neo_geo_run_game(const UNeoGeoRuntimeDefinition *definition) {
     }
 
     neo_geo_session_begin();
+
     if (definition->start_game != NULL) {
         definition->start_game(definition->context);
     }
 
     neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_GAME);
+
     while (!neo_geo_session_has_ended() && neo_geo_session_has_participating_players()) {
         neo_geo_frame(definition, U_NEO_GEO_PHASE_GAME);
     }
@@ -113,6 +112,7 @@ static void neo_geo_run_game(const UNeoGeoRuntimeDefinition *definition) {
     }
 
     neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_GAME_OVER);
+
     while (!neo_geo_session_has_ended()) {
         neo_geo_frame(definition, U_NEO_GEO_PHASE_GAME_OVER);
     }
@@ -130,6 +130,7 @@ static void neo_geo_run_demo(const UNeoGeoRuntimeDefinition *definition) {
     neo_geo_attract_ended = false;
 
     neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_ATTRACT);
+
     while (!neo_geo_attract_ended && !unsigned_neo_geo_game_started()) {
         neo_geo_frame(definition, U_NEO_GEO_PHASE_ATTRACT);
     }
@@ -149,14 +150,17 @@ static void neo_geo_run_title(const UNeoGeoRuntimeDefinition *definition) {
     bios_user_mode = U_NEO_GEO_MODE_DEMO;
 
     neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_TITLE);
+
     while (!unsigned_neo_geo_game_started()) {
         neo_geo_frame(definition, U_NEO_GEO_PHASE_TITLE);
     }
+
     neo_geo_run_game(definition);
 }
 
 static void neo_geo_run_initialized(const UNeoGeoRuntimeDefinition *definition, void (*run)(const UNeoGeoRuntimeDefinition *)) {
     neo_geo_bios_begin_runtime(definition);
+
     if (definition->initialize != NULL) {
         definition->initialize(definition->context);
     }
@@ -165,43 +169,55 @@ static void neo_geo_run_initialized(const UNeoGeoRuntimeDefinition *definition, 
     run(definition);
 
     neo_geo_bios_end_runtime();
+
     if (definition->shutdown != NULL) {
         definition->shutdown(definition->context);
     }
 }
 
+/**
+ * Main ngdevkit BIOS entry point.
+ *
+ * Dispatches USER 1/2/3 according to BIOS_USER_REQUEST.
+ */
 int unsigned_neo_geo_main(const UNeoGeoRuntimeDefinition *definition, USoundCommand coin_sound_command) {
-    const UNeoGeoBiosRequest request = neo_geo_bios_request();
+    const UNeoGeoBiosRequest request = bios_user_request <= U_NEO_GEO_BIOS_REQUEST_TITLE ? (UNeoGeoBiosRequest)bios_user_request : U_NEO_GEO_BIOS_REQUEST_INVALID;
+
     neo_geo_init(coin_sound_command, request);
 
     switch (request) {
     case U_NEO_GEO_BIOS_REQUEST_EYE_CATCHER:
         bios_user_mode = U_NEO_GEO_MODE_BOOT;
+
         if (definition->eye_catcher != NULL) {
             definition->eye_catcher(definition->context);
         }
-        return 0;
+        break;
 
     case U_NEO_GEO_BIOS_REQUEST_DEMO:
         neo_geo_run_initialized(definition, neo_geo_run_demo);
-        return 0;
+        break;
 
-    /* USER 0 uses rom_mvs_startup_init; USER 3 uses main_mvs_title(). */
-    case U_NEO_GEO_BIOS_REQUEST_INIT:
     case U_NEO_GEO_BIOS_REQUEST_TITLE:
+        neo_geo_run_initialized(definition, neo_geo_run_title);
+        break;
+
+    case U_NEO_GEO_BIOS_REQUEST_INIT:
     case U_NEO_GEO_BIOS_REQUEST_INVALID:
-    default:
-        return 0;
+        break;
     }
+
+    return 0;
 }
 
+/**
+ * ngdevkit MVS USER 3 entry point.
+ *
+ * USER 3 is a dedicated TITLE entry: initialize the cartridge-side runtime after the BIOS has
+ * remapped CRTFIX/M1, then run the same initialized TITLE lifecycle used by the shared runner.
+ */
 int unsigned_neo_geo_main_mvs(const UNeoGeoRuntimeDefinition *definition, USoundCommand coin_sound_command) {
-    const UNeoGeoBiosRequest request = neo_geo_bios_request();
-    if (request != U_NEO_GEO_BIOS_REQUEST_TITLE) {
-        return 0;
-    }
-
-    neo_geo_init(coin_sound_command, request);
+    neo_geo_init(coin_sound_command, U_NEO_GEO_BIOS_REQUEST_TITLE);
     neo_geo_run_initialized(definition, neo_geo_run_title);
     return 0;
 }

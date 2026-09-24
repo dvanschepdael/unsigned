@@ -31,24 +31,20 @@ static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) 
     UPoolInstanceContainer *npcs = &level->actor_pools->npcs;
     UPoolInstanceContainer *objects = &level->actor_pools->objects;
 
-    u8 remaining = players->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(players) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(players); ++i) {
         UPoolInstance *instance = &players->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UPlayer *player = instance->args;
         level_collision_probe_actor(&player->character->actor, &state);
     }
 
-    remaining = npcs->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(npcs) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(npcs); ++i) {
         UPoolInstance *instance = &npcs->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UNpc *npc = instance->args;
         if (active_npcs_only && npc->activity != U_NPC_ACTIVITY_ACTIVE) {
             unsigned_actor_collision_deactivate_frame(&npc->character->actor);
@@ -57,13 +53,11 @@ static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) 
         level_collision_probe_actor(&npc->character->actor, &state);
     }
 
-    remaining = objects->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(objects) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(objects); ++i) {
         UPoolInstance *instance = &objects->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UObject *object = instance->args;
         if (!object->static_collision) {
             level_collision_probe_actor(&object->actor, &state);
@@ -88,13 +82,11 @@ static void level_collision_materialize_actor(UActor *actor, UCollisionManager *
 
 /** Materialize active player collision only on frames that actually execute collision queries. */
 static void level_collision_materialize_players(UPoolInstanceContainer *pool, UCollisionManager *manager, ULevelDynamicCollisionState *state) {
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UPlayer *player = instance->args;
         level_collision_materialize_actor(&player->character->actor, manager, state);
     }
@@ -102,13 +94,11 @@ static void level_collision_materialize_players(UPoolInstanceContainer *pool, UC
 
 /** Materialize active NPC collision, retiring frame state for NPCs excluded by level policy. */
 static void level_collision_materialize_npcs(UPoolInstanceContainer *pool, UCollisionManager *manager, bool active_only, ULevelDynamicCollisionState *state) {
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UNpc *npc = instance->args;
         if (active_only && npc->activity != U_NPC_ACTIVITY_ACTIVE) {
             unsigned_actor_collision_deactivate_frame(&npc->character->actor);
@@ -121,13 +111,11 @@ static void level_collision_materialize_npcs(UPoolInstanceContainer *pool, UColl
 
 /** Materialize non-persistent object collision; static objects remain registered from level load. */
 static void level_collision_materialize_objects(UPoolInstanceContainer *pool, UCollisionManager *manager, ULevelDynamicCollisionState *state) {
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UObject *object = instance->args;
         if (object->static_collision) {
             continue;
@@ -155,13 +143,11 @@ static ULevelDynamicCollisionState level_collision_materialize_dynamic(ULevel *l
 static void level_collision_register_static_objects(UPoolInstanceContainer *pool, UCollisionManager *manager, bool *has_hitboxes) {
     *has_hitboxes = false;
 
-    u8 remaining = pool->count;
-    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool) && remaining > 0u; ++i) {
+    for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (!instance->active) {
             continue;
         }
-        --remaining;
         UObject *object = instance->args;
         if (!object->static_collision) {
             continue;

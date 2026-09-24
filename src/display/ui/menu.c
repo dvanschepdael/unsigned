@@ -10,27 +10,27 @@
 
 #pragma region Focus navigation
 
-/** Returns whether the menu element at the requested index can currently receive focus. */
-static bool unsigned_ui_menu_index_focusable(const UUIMenu *menu, u8 index) {
-    return unsigned_ui_element_can_focus(menu->items[index]);
-}
-
 /** Searches circularly from the current index for the next enabled, visible and focusable menu item. */
 static bool unsigned_ui_menu_find_next(const UUIMenu *menu, u8 start_index, bool forward, u8 *result_index) {
     if (menu->count == 0) {
         return false;
     }
 
-    for (u8 step = 1; step <= menu->count; ++step) {
-        u8 index;
-
+    u8 index = start_index;
+    for (u8 step = 0u; step < menu->count; ++step) {
         if (forward) {
-            index = (u8)((start_index + step) % menu->count);
+            ++index;
+            if (index == menu->count) {
+                index = 0u;
+            }
         } else {
-            index = (u8)((start_index + menu->count - (step % menu->count)) % menu->count);
+            if (index == 0u) {
+                index = menu->count;
+            }
+            --index;
         }
 
-        if (unsigned_ui_menu_index_focusable(menu, index)) {
+        if (unsigned_ui_element_can_focus(menu->items[index])) {
             *result_index = index;
             return true;
         }
@@ -57,7 +57,7 @@ static void unsigned_ui_menu_repair_focus(UUIMenu *menu) {
         return;
     }
 
-    if (menu->focused_index != UINT8_MAX && unsigned_ui_menu_index_focusable(menu, menu->focused_index)) {
+    if (menu->focused_index != UINT8_MAX && unsigned_ui_element_can_focus(menu->items[menu->focused_index])) {
         menu->items[menu->focused_index]->focused = true;
         return;
     }

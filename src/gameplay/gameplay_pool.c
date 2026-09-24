@@ -49,10 +49,6 @@ void unsigned_gameplay_pool_clear(UPoolInstanceContainer *pool, UGameplayPoolRel
 }
 
 void unsigned_gameplay_pool_tick(UPoolInstanceContainer *pool, UGameplayPoolReleaseFunction release_function, void *release_context) {
-    if (pool->count == 0u) {
-        return;
-    }
-
     for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];
         if (!instance->active) {

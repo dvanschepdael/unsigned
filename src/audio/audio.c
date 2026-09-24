@@ -44,13 +44,6 @@ static USoundCommand audio_pop_sound_effect(UAudioManager *audio) {
     return command;
 }
 
-static USoundCommand audio_next_command(UAudioManager *audio) {
-    ++audio->tick;
-
-    const USoundCommand music_command = unsigned_audio_music_tick(audio);
-    return music_command != U_AUDIO_COMMAND_NONE ? music_command : audio_pop_sound_effect(audio);
-}
-
 void unsigned_audio_manager_tick(UAudioManager *audio) {
     /*
      * The platform transport may apply back-pressure. Keep the already-resolved command in the
@@ -63,7 +56,11 @@ void unsigned_audio_manager_tick(UAudioManager *audio) {
         return;
     }
 
-    const USoundCommand command = audio_next_command(audio);
+    ++audio->tick;
+    USoundCommand command = unsigned_audio_music_tick(audio);
+    if (command == U_AUDIO_COMMAND_NONE) {
+        command = audio_pop_sound_effect(audio);
+    }
     if (command != U_AUDIO_COMMAND_NONE && !unsigned_audio_backend_send(command)) {
         audio->pending_backend_command = command;
     }

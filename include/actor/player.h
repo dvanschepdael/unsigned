@@ -38,12 +38,6 @@ typedef struct UPlayer {
 } UPlayer;
 
 /**
- * @brief Advances the player by one scheduled engine frame.
- *
- * @param player Player runtime whose character/input state is read or updated.
- * @pre `player` and `player->character` are valid.
- */
-/**
  * @brief Matches controller state against ability bindings and manages their runtime slots.
  *
  * `U_INPUT_TRIGGER_DOWN` is continuous: its ability is released when the input stops matching.
