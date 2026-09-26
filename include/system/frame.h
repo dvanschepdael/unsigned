@@ -26,20 +26,25 @@
 void unsigned_frame_begin(void);
 
 /**
- * @brief Returns the estimated 68000 cycles remaining in the measured video frame.
+ * @brief Returns a conservative estimate of 68000 cycles remaining in the measured frame.
  *
  * @details
  * The measurement uses the read-only raster line counter exposed through REG_LSPCMODE, so it works
- * both on Neo Geo hardware and in MAME without modifying the runtime loop. The counter has scanline
- * resolution: one scanline is 768 68000 cycles. The returned value is therefore quantized to 768
- * cycles and may differ from the exact MAME debugger `totalcycles` delta by at most 767 cycles.
+ * both on Neo Geo hardware and in MAME without modifying the runtime loop. The counter only exposes
+ * scanline position, not horizontal pixel position, so the exact sub-scanline CPU position is not
+ * observable from cartridge code.
+ *
+ * One scanline is 768 68000 cycles. To avoid overstating available CPU time,
+ * unsigned_frame_end() charges the current partial scanline as fully consumed. The result is thus
+ * quantized to 768 cycles and may be up to 768 cycles lower than the exact MAME debugger
+ * `totalcycles` measurement.
  *
  * 60 Hz hardware uses 264 scanlines (202752 cycles/frame); PAL 50 Hz hardware uses 312 scanlines
  * (239616 cycles/frame). The video mode sampled by unsigned_frame_begin() defines the budget.
  *
  * @pre unsigned_frame_begin() was called for the current measurement interval.
  * @pre Less than one complete video frame elapsed since unsigned_frame_begin().
- * @return Estimated number of 68000 cycles remaining in the current measured frame budget.
+ * @return Conservative estimated number of 68000 cycles remaining in the measured frame budget.
  */
 u32 unsigned_frame_end(void);
 
