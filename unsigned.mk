@@ -16,8 +16,13 @@ UNSIGNED_LIB := $(UNSIGNED_BUILD_DIR)/unsigned.a
 # ============================================================================
 
 # unsigned owns its optimization policy. These flags are only applied to
-# unsigned sources, not to the game's sources.
+# unsigned C sources, not to the game's sources.
 UNSIGNED_CFLAGS := -O2 -flto
+
+# Preprocessed 68000 assembly deliberately does not inherit C-only options
+# such as -std=c99 or LTO. Keep only preprocessor options supplied by the
+# parent build; NGCFLAGS still provides the target/toolchain configuration.
+UNSIGNED_ASM_CPPFLAGS = $(filter -I% -D% -U%,$(CPPFLAGS) $(CFLAGS))
 
 # Renderer diagnostics are opt-in. Keep the switch owned by unsigned so the
 # parent game Makefile only has to select the mode. This recursive variable is
@@ -48,13 +53,20 @@ UNSIGNED_RANLIB ?= m68k-neogeo-elf-gcc-ranlib
 # Sources
 # ============================================================================
 
-UNSIGNED_SRCS := $(shell find $(UNSIGNED_SRC_DIR) -type f -name '*.c')
+UNSIGNED_C_SRCS := $(shell find $(UNSIGNED_SRC_DIR) -type f -name '*.c')
+UNSIGNED_ASM_SRCS := $(shell find $(UNSIGNED_SRC_DIR) -type f -name '*.asm')
 
-UNSIGNED_OBJS := $(patsubst \
+UNSIGNED_C_OBJS := $(patsubst \
 	$(UNSIGNED_SRC_DIR)/%.c, \
 	$(UNSIGNED_BUILD_DIR)/%.o, \
-	$(UNSIGNED_SRCS))
+	$(UNSIGNED_C_SRCS))
 
+UNSIGNED_ASM_OBJS := $(patsubst \
+	$(UNSIGNED_SRC_DIR)/%.asm, \
+	$(UNSIGNED_BUILD_DIR)/%.o, \
+	$(UNSIGNED_ASM_SRCS))
+
+UNSIGNED_OBJS := $(UNSIGNED_C_OBJS) $(UNSIGNED_ASM_OBJS)
 UNSIGNED_DEPS := $(UNSIGNED_OBJS:.o=.d)
 
 
@@ -72,6 +84,12 @@ CFLAGS += -I$(UNSIGNED_INCLUDE_DIR)
 $(UNSIGNED_BUILD_DIR)/%.o: $(UNSIGNED_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(M68KGCC) $(NGCFLAGS) $(CFLAGS) $(UNSIGNED_CFLAGS) $(UNSIGNED_DIAGNOSTIC_CFLAGS) -MMD -MP -c $< -o $@
+
+# .asm is preprocessed Motorola 68000 assembly. Force the language explicitly
+# because GCC does not infer assembler-with-cpp from the .asm suffix.
+$(UNSIGNED_BUILD_DIR)/%.o: $(UNSIGNED_SRC_DIR)/%.asm
+	@mkdir -p $(dir $@)
+	$(M68KGCC) $(NGCFLAGS) $(UNSIGNED_ASM_CPPFLAGS) $(UNSIGNED_DIAGNOSTIC_CFLAGS) -MMD -MP -x assembler-with-cpp -c $< -o $@
 
 
 # ============================================================================
