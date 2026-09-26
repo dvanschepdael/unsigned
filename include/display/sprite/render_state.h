@@ -29,10 +29,15 @@
 typedef struct USpritePreviousRenderState {
     u16 first_sprite;
     const void *frame;
+    s16 x;
+    s16 y;
+    u16 scb2;
     u8 palette;
     u8 flip_flags;
     bool range_valid;
     bool graphics_valid;
+    /** True when the previous range already contained one valid driver + sticky chain. */
+    bool chain_valid;
 } USpritePreviousRenderState;
 
 /** Hardware-sprite range assigned by the actor layout phase. */

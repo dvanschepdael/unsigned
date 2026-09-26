@@ -67,14 +67,14 @@ static bool actor_renderer_stable_layout_needs_relocation(const UActorContainer 
     return false;
 }
 
-/** Snapshot the hardware ranges/content currently owned by one actor sprite class. */
-static void actor_renderer_snapshot_pass(UActorContainer *actors, bool underlays) {
+/** Snapshot hardware ranges/content while each actor is already hot in the relocation path. */
+static void actor_renderer_snapshot(UActorContainer *actors) {
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
-        USprite *sprite = underlays ? actor->underlay : &actor->sprite;
-        if (sprite != NULL) {
-            unsigned_sprite_renderer_snapshot_layout(sprite);
+        if (actor->underlay != NULL) {
+            unsigned_sprite_renderer_snapshot_layout(actor->underlay);
         }
+        unsigned_sprite_renderer_snapshot_layout(&actor->sprite);
     }
 }
 
@@ -114,26 +114,33 @@ static USprite *actor_renderer_previous_owner(UActorContainer *actors, u8 curren
     return NULL;
 }
 
+/** Reuse compatible hardware state left in one stable slot by its previous owner. */
+static void actor_renderer_reuse_relocated_sprite(UActorContainer *actors, u8 index, USprite *sprite, bool underlay) {
+    if (sprite == NULL || !sprite->render.previous.range_valid || sprite->render.previous.first_sprite == sprite->render.layout.first_sprite) {
+        return;
+    }
+
+    USprite *previous_owner = actor_renderer_previous_owner(actors, index, sprite->render.layout.first_sprite, underlay);
+    if (unsigned_sprite_renderer_can_reuse_previous_chain(sprite, previous_owner)) {
+        unsigned_sprite_renderer_reuse_previous_chain(sprite, previous_owner);
+    }
+    if (unsigned_sprite_renderer_can_reuse_previous_graphics(sprite, previous_owner)) {
+        unsigned_sprite_renderer_reuse_previous_graphics(sprite);
+    }
+}
+
 /**
- * Reuse SCB1 content left in stable hardware slots by an identical previous owner.
+ * Reuse stable-slot SCB1 graphics and compatible SCB3 chains after depth-order relocation.
  *
- * Stable actor layouts intentionally keep the complete crowd span reserved. When depth sorting
- * changes only actor ownership, the destination range often already contains the exact same
- * animation frame/palette (notably for crowds sharing one NPC definition). Only SCB1 graphics
- * are inherited: chain/SCB2/SCB3 ownership is rebuilt authoritatively after every relocation.
+ * The destination range still contains the previous owner's hardware state. When width/height
+ * match, keep its valid driver/sticky chain and let prepare dirty only coordinates/scale that
+ * really differ. Identical animation graphics can independently keep SCB1 too.
  */
-static void actor_renderer_reuse_relocated_graphics(UActorContainer *actors, bool underlays) {
+static void actor_renderer_reuse_relocated_state(UActorContainer *actors) {
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
-        USprite *sprite = underlays ? actor->underlay : &actor->sprite;
-        if (sprite == NULL || !sprite->render.previous.range_valid || sprite->render.previous.first_sprite == sprite->render.layout.first_sprite) {
-            continue;
-        }
-
-        USprite *previous_owner = actor_renderer_previous_owner(actors, i, sprite->render.layout.first_sprite, underlays);
-        if (unsigned_sprite_renderer_can_reuse_previous_graphics(sprite, previous_owner)) {
-            unsigned_sprite_renderer_reuse_previous_graphics(sprite);
-        }
+        actor_renderer_reuse_relocated_sprite(actors, i, actor->underlay, true);
+        actor_renderer_reuse_relocated_sprite(actors, i, &actor->sprite, false);
     }
 }
 
@@ -174,8 +181,7 @@ void unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_
     if (reserve_hidden) {
         stable_relocation = actor_renderer_stable_layout_needs_relocation(actors, first_sprite);
         if (stable_relocation) {
-            actor_renderer_snapshot_pass(actors, true);
-            actor_renderer_snapshot_pass(actors, false);
+            actor_renderer_snapshot(actors);
         }
     }
 
@@ -194,8 +200,7 @@ void unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_
     }
 
     if (stable_relocation) {
-        actor_renderer_reuse_relocated_graphics(actors, true);
-        actor_renderer_reuse_relocated_graphics(actors, false);
+        actor_renderer_reuse_relocated_state(actors);
     }
 
 }
@@ -221,24 +226,42 @@ void unsigned_actor_renderer_force_rebuild_prepared(UActorContainer *actors) {
     }
 }
 
-void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer) {
-    /* Match commit order: all ground underlays first, then actor bodies. */
+static inline void actor_renderer_plan_prepared_sprite(const USprite *sprite, UActorRenderPlan *actor_plan) {
+    if (!sprite->render.prepared.valid) {
+        return;
+    }
+
+    const u8 driver_dirty = unsigned_sprite_renderer_prepared_driver_dirty(sprite);
+    actor_plan->driver_dirty = (u8)(actor_plan->driver_dirty | driver_dirty);
+    if (driver_dirty == 0u) {
+        actor_plan->has_non_driver_work = true;
+    }
+    if ((sprite->render.dirty & U_SPRITE_RENDER_DIRTY_CHAIN_BOUNDARY) != 0u) {
+        actor_plan->has_chain_boundary_work = true;
+    }
+}
+
+void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan) {
+    *actor_plan = (UActorRenderPlan){0};
+
+    /* CPU-side preparation can process underlay + body while the actor pointer is already hot.
+     * Hardware ownership/commit order remains unchanged. */
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
         USprite *underlay = actor->underlay;
+
         if (underlay != NULL) {
             unsigned_sprite_renderer_prepare_draw(underlay, viewport, &actor->position, column_buffer);
             if (underlay->render.prepared.valid) {
                 unsigned_render_plan_mark_work(plan);
+                actor_renderer_plan_prepared_sprite(underlay, actor_plan);
             }
         }
-    }
 
-    for (u8 i = 0u; i < actors->count; ++i) {
-        UActor *actor = actors->instances[i];
         unsigned_sprite_renderer_prepare_draw(&actor->sprite, viewport, &actor->position, column_buffer);
         if (actor->sprite.render.prepared.valid) {
             unsigned_render_plan_mark_work(plan);
+            actor_renderer_plan_prepared_sprite(&actor->sprite, actor_plan);
         }
     }
 }
@@ -249,32 +272,34 @@ static USprite *actor_renderer_pass_sprite(UActorContainer *actors, u8 index, bo
     return underlays ? actor->underlay : &actor->sprite;
 }
 
-/** Flush a candidate driver run only when address programming is strictly reduced. */
-static void actor_renderer_flush_driver_run(USprite **run, u8 count, u8 axis, bool all_axis_only) {
+/** Flush a candidate driver run and report whether every sprite in it was committed here. */
+static bool actor_renderer_flush_driver_run(USprite **run, u8 count, u8 axis, bool all_axis_only) {
     if (count == 0u) {
-        return;
+        return true;
     }
 
     /* One two-axis sprite is cheaper through the existing SCB3->SCB4 0x200 stride. Two sprites
      * with both axes dirty are address-neutral. Single-axis pairs and all runs of 3+ save at least
      * one VRAMADDR write, so only those are streamed here. */
     if (count < 3u && !(count >= 2u && all_axis_only)) {
-        return;
+        return false;
     }
 
     unsigned_sprite_backend_write_driver_batch(run, count, axis);
     for (u8 i = 0u; i < count; ++i) {
         unsigned_sprite_renderer_commit_batched_driver_axis(run[i], axis);
     }
+    return true;
 }
 
 /** Batch one SCB driver axis over contiguous same-width ranges in one underlay/body pass. */
-static void actor_renderer_commit_driver_axis_pass(UActorContainer *actors, bool underlays, u8 axis) {
+static bool actor_renderer_commit_driver_axis_pass(UActorContainer *actors, bool underlays, u8 axis) {
     USprite *run[UNSIGNED_RENDERER_DRIVER_BATCH_CAPACITY];
     u8 run_count = 0u;
     u8 stride = 0u;
     u16 expected_first = 0u;
     bool all_axis_only = true;
+    bool all_batched = true;
 
     for (u8 cursor = 0u; cursor < actors->count; ++cursor) {
         USprite *sprite = actor_renderer_pass_sprite(actors, cursor, underlays);
@@ -284,7 +309,7 @@ static void actor_renderer_commit_driver_axis_pass(UActorContainer *actors, bool
         const bool capacity_available = run_count < UNSIGNED_RENDERER_DRIVER_BATCH_CAPACITY;
 
         if (!axis_dirty || !contiguous || !capacity_available) {
-            actor_renderer_flush_driver_run(run, run_count, axis, all_axis_only);
+            all_batched = actor_renderer_flush_driver_run(run, run_count, axis, all_axis_only) && all_batched;
             run_count = 0u;
             stride = 0u;
             expected_first = 0u;
@@ -300,7 +325,6 @@ static void actor_renderer_commit_driver_axis_pass(UActorContainer *actors, bool
             expected_first = sprite->render.layout.first_sprite;
         }
 
-        /* A full chunk was just flushed above; start a new contiguous chunk with this sprite. */
         if (sprite->render.layout.sprite_count != stride || sprite->render.layout.first_sprite != expected_first) {
             stride = sprite->render.layout.sprite_count;
         }
@@ -310,15 +334,12 @@ static void actor_renderer_commit_driver_axis_pass(UActorContainer *actors, bool
         expected_first = (u16)(sprite->render.layout.first_sprite + sprite->render.layout.sprite_count);
     }
 
-    actor_renderer_flush_driver_run(run, run_count, axis, all_axis_only);
+    all_batched = actor_renderer_flush_driver_run(run, run_count, axis, all_axis_only) && all_batched;
+    return all_batched;
 }
 
 void unsigned_actor_renderer_precommit_chain_boundaries(UActorContainer *actors) {
-    /*
-     * Two passes preserve the renderer's underlay/body ownership layout. More
-     * importantly, every future chain driver is made non-sticky before any
-     * relocated sprite starts rebuilding its interior sticky columns.
-     */
+    /* Preserve hardware ownership order for the rare relocation/rebuild path. */
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
         USprite *underlay = actor->underlay;
@@ -329,19 +350,31 @@ void unsigned_actor_renderer_precommit_chain_boundaries(UActorContainer *actors)
 
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
-
         if (actor->sprite.render.prepared.valid) {
             unsigned_sprite_renderer_precommit_chain_boundary(&actor->sprite);
         }
     }
 }
 
-void unsigned_actor_renderer_commit_prepared(UActorContainer *actors) {
-    /* Hardware ownership is all-underlays then all-bodies, matching layout/commit order. */
-    actor_renderer_commit_driver_axis_pass(actors, true, U_SPRITE_RENDER_DIRTY_Y);
-    actor_renderer_commit_driver_axis_pass(actors, false, U_SPRITE_RENDER_DIRTY_Y);
-    actor_renderer_commit_driver_axis_pass(actors, true, U_SPRITE_RENDER_DIRTY_X);
-    actor_renderer_commit_driver_axis_pass(actors, false, U_SPRITE_RENDER_DIRTY_X);
+void unsigned_actor_renderer_commit_prepared(UActorContainer *actors, const UActorRenderPlan *actor_plan) {
+    bool all_driver_work_batched = true;
+
+    /* Do not even traverse an axis that CPU preparation proved clean. Camera scrolling is normally
+     * X-only, so the two complete Y passes disappear from that hot path. */
+    if ((actor_plan->driver_dirty & U_SPRITE_RENDER_DIRTY_Y) != 0u) {
+        all_driver_work_batched = actor_renderer_commit_driver_axis_pass(actors, true, U_SPRITE_RENDER_DIRTY_Y) && all_driver_work_batched;
+        all_driver_work_batched = actor_renderer_commit_driver_axis_pass(actors, false, U_SPRITE_RENDER_DIRTY_Y) && all_driver_work_batched;
+    }
+    if ((actor_plan->driver_dirty & U_SPRITE_RENDER_DIRTY_X) != 0u) {
+        all_driver_work_batched = actor_renderer_commit_driver_axis_pass(actors, true, U_SPRITE_RENDER_DIRTY_X) && all_driver_work_batched;
+        all_driver_work_batched = actor_renderer_commit_driver_axis_pass(actors, false, U_SPRITE_RENDER_DIRTY_X) && all_driver_work_batched;
+    }
+
+    /* A large homogeneous crowd moving only because the camera scrolled is fully consumed by the
+     * driver batches above. Skip two otherwise-empty underlay/body draw scans in that case. */
+    if (!actor_plan->has_non_driver_work && all_driver_work_batched) {
+        return;
+    }
 
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];

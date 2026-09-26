@@ -19,6 +19,12 @@ bool unsigned_sprite_renderer_can_reuse_previous_graphics(const USprite *sprite,
 /** Adopt equivalent SCB1 graphics already present in the current range, avoiding a redundant upload. */
 void unsigned_sprite_renderer_reuse_previous_graphics(USprite *sprite);
 
+/** Return true when the destination range already contains a compatible chained transform layout. */
+bool unsigned_sprite_renderer_can_reuse_previous_chain(const USprite *sprite, const USprite *previous_owner);
+
+/** Adopt the destination range's chained transform mirror so prepare() dirties only real deltas. */
+void unsigned_sprite_renderer_reuse_previous_chain(USprite *sprite, const USprite *previous_owner);
+
 /** Return pure driver-position dirty bits when a prepared sprite is safe for cross-sprite batching. */
 u8 unsigned_sprite_renderer_prepared_driver_dirty(const USprite *sprite);
 

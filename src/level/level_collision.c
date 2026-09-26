@@ -17,6 +17,18 @@ typedef struct ULevelDynamicCollisionState {
     bool has_boxes;
 } ULevelDynamicCollisionState;
 
+/**
+ * Fast idle rejection before entering the collision probe function.
+ * A batchable animation is guaranteed to contain no hitbox; if no previous attack edge remains
+ * cached either, this actor cannot become an attack source until gameplay selects another animation.
+ */
+static inline bool level_collision_probe_actor(UActor *actor) {
+    if (actor->sprite.batchable_animation && actor->collision.hitbox_channel == U_COLLISION_CHANNEL_NONE) {
+        return false;
+    }
+    return unsigned_actor_collision_probe(actor);
+}
+
 /** Lightweight attack-source scan used by the idle-frame fast path.
  * Once one hitbox is found, the caller will materialize every dynamic actor immediately, so
  * continuing the probe would only duplicate that traversal.
@@ -33,7 +45,7 @@ static bool level_collision_probe_dynamic(ULevel *level) {
             continue;
         }
         UPlayer *player = instance->args;
-        if (unsigned_actor_collision_probe(&player->character->actor)) {
+        if (level_collision_probe_actor(&player->character->actor)) {
             return true;
         }
     }
@@ -48,7 +60,7 @@ static bool level_collision_probe_dynamic(ULevel *level) {
             unsigned_actor_collision_deactivate_frame(&npc->character->actor);
             continue;
         }
-        if (unsigned_actor_collision_probe(&npc->character->actor)) {
+        if (level_collision_probe_actor(&npc->character->actor)) {
             return true;
         }
     }
@@ -59,7 +71,7 @@ static bool level_collision_probe_dynamic(ULevel *level) {
             continue;
         }
         UObject *object = instance->args;
-        if (!object->static_collision && unsigned_actor_collision_probe(&object->actor)) {
+        if (!object->static_collision && level_collision_probe_actor(&object->actor)) {
             return true;
         }
     }

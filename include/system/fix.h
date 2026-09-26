@@ -16,6 +16,17 @@
  */
 void unsigned_neo_geo_fix_clear(void);
 /**
+ * @brief Draws normal-height text at an explicit FIX position.
+ *
+ * @param column First FIX column.
+ * @param row FIX row.
+ * @param palette Palette data to use.
+ * @param text Text bytes rendered to the Neo Geo FIX layer.
+ * @pre `column < UNSIGNED_NEO_GEO_FIX_COLUMNS`, `row < UNSIGNED_NEO_GEO_FIX_ROWS`,
+ *      `palette < 16`, and `text` is valid.
+ */
+void unsigned_neo_geo_fix_text(u8 column, u8 row, u8 palette, const char *text);
+/**
  * @brief Centers the neo geo FIX text.
  *
  * @param row Row index to use.

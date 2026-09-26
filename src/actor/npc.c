@@ -53,6 +53,25 @@ void unsigned_npc_init(UNpc *npc) {
 }
 
 void unsigned_npc_tick_scheduled(UNpc *npc, const UTLSS *tlss, u16 slot) {
+    /* Visible NPCs are the dominant crowd case. When the presentation clock is already current
+     * and playback was not restarted, use the regular one-frame tick directly. Only a NPC waking
+     * from deferred presentation pays the TLSS catch-up path. */
+    if (npc->activity == U_NPC_ACTIVITY_ACTIVE) {
+        const USprite *sprite = &npc->character->actor.sprite;
+        const u16 previous_frame = (u16)(tlss->frame - 1u);
+        if (npc->tlss_presentation.last_tick == previous_frame && npc->presentation_playback_revision == sprite->playback_revision) {
+            unsigned_actor_tick(&npc->character->actor);
+            npc->tlss_presentation.last_tick = tlss->frame;
+            npc->presentation_animation_last_tick = tlss->frame;
+            npc->presentation_playback_revision = npc->character->actor.sprite.playback_revision;
+            return;
+        }
+
+        npc_presentation_sync_playback_revision(npc, tlss);
+        npc_presentation_batch_to_current_frame(npc, tlss);
+        return;
+    }
+
     npc_presentation_sync_playback_revision(npc, tlss);
 
     if (npc->activity == U_NPC_ACTIVITY_DORMANT) {
@@ -67,13 +86,6 @@ void unsigned_npc_tick_scheduled(UNpc *npc, const UTLSS *tlss, u16 slot) {
         npc->tlss_presentation.last_tick = tlss->frame;
         npc->presentation_animation_last_tick = tlss->frame;
         npc->presentation_playback_revision = npc->character->actor.sprite.playback_revision;
-        return;
-    }
-
-    if (npc->activity == U_NPC_ACTIVITY_ACTIVE) {
-        /* An NPC may become visible between its off-screen phases. Catch it up immediately so
-         * rendering never exposes a stale presentation frame/effect phase. */
-        npc_presentation_batch_to_current_frame(npc, tlss);
         return;
     }
 

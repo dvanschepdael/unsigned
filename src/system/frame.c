@@ -50,3 +50,10 @@ u32 unsigned_frame_end(void) {
 
     return frame_total_cycles - elapsed_cycles;
 }
+
+u32 unsigned_frame_usage_percent(u32 used_cycles) {
+    const u32 whole_frames = used_cycles / frame_total_cycles;
+    const u32 remaining_cycles = used_cycles % frame_total_cycles;
+
+    return whole_frames * 100u + remaining_cycles * 100u / frame_total_cycles;
+}

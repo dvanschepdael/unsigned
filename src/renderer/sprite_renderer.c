@@ -52,9 +52,13 @@ void unsigned_sprite_renderer_snapshot_layout(USprite *sprite) {
     render->previous.first_sprite = render->layout.first_sprite;
     render->previous.range_valid = render->layout.assigned;
     render->previous.frame = render->committed.frame;
+    render->previous.x = render->committed.x;
+    render->previous.y = render->committed.y;
+    render->previous.scb2 = render->committed.scb2;
     render->previous.palette = render->committed.palette;
     render->previous.flip_flags = render->committed.flip_flags;
     render->previous.graphics_valid = render->committed.graphics_valid;
+    render->previous.chain_valid = render->committed.initialized && render->committed.chained && render->committed.visible;
 }
 
 bool unsigned_sprite_renderer_can_reuse_previous_graphics(const USprite *sprite, const USprite *previous_owner) {
@@ -84,6 +88,31 @@ void unsigned_sprite_renderer_reuse_previous_graphics(USprite *sprite) {
     sprite->render.effect_flip_x = 0u;
     sprite->render.effect_flip_y = 0u;
     sprite_renderer_cache_graphics(sprite);
+}
+
+bool unsigned_sprite_renderer_can_reuse_previous_chain(const USprite *sprite, const USprite *previous_owner) {
+    if (previous_owner == NULL) {
+        return false;
+    }
+
+    const USpriteRenderState *previous = &previous_owner->render;
+    return previous->previous.range_valid && previous->previous.chain_valid && previous->previous.first_sprite == sprite->render.layout.first_sprite &&
+           previous_owner->render.layout.sprite_count == sprite->render.layout.sprite_count && previous_owner->definition->height_tiles == sprite->definition->height_tiles;
+}
+
+void unsigned_sprite_renderer_reuse_previous_chain(USprite *sprite, const USprite *previous_owner) {
+    USpriteRenderState *render = &sprite->render;
+    const USpritePreviousRenderState *previous = &previous_owner->render.previous;
+
+    /* The destination already owns the same hardware-width chain shape. Adopt its exact driver
+     * mirror, then let normal prepare dirty only X/Y/SCB2 values that differ for the new owner. */
+    render->committed.x = previous->x;
+    render->committed.y = previous->y;
+    render->committed.scb2 = previous->scb2;
+    render->committed.initialized = true;
+    render->committed.chained = true;
+    render->committed.visible = true;
+    unsigned_sprite_render_clear_dirty(render, U_SPRITE_RENDER_DIRTY_TRANSFORM | U_SPRITE_RENDER_DIRTY_LAYOUT | U_SPRITE_RENDER_DIRTY_CHAIN_BOUNDARY);
 }
 
 /** Mark transform fields that differ from the last chained hardware state. */
@@ -257,12 +286,22 @@ static void sprite_renderer_prepare_visible(USprite *sprite, const UViewport *vi
     if (sprite_renderer_uses_identity_effects(sprite, viewport)) {
         const u16 scb2 = (u16)(((u16)render->shrink_x << 8u) | render->shrink_y);
 
-        /* Fast path for the dominant idle/movement-stopped case. The hardware mirror is already
-         * authoritative, so avoid padding lookup plus dirty detection entirely. Culling/layout has
-         * still run at the actor layer, which keeps viewport resize and ownership semantics intact. */
+        /* Dominant stable-state fast path. Camera scrolling changes only screen X for stationary
+         * actors, so preserve the authoritative graphics/chain/padding state and dirty just SCB4.
+         * This avoids the generic padding + transform-detection path for every crowd sprite. */
         if (render->effect_flip_x == 0u && render->effect_flip_y == 0u && render->dirty == 0u && render->committed.initialized && render->committed.chained && render->committed.visible && render->committed.graphics_valid &&
-            render->committed.frame == sprite->current_frame && render->committed.palette == sprite->palette && render->committed.flip_flags == sprite_renderer_graphics_flip_flags(sprite) && render->committed.x == screen_x &&
-            render->committed.y == screen_y && render->committed.scb2 == scb2) {
+            render->committed.frame == sprite->current_frame && render->committed.palette == sprite->palette && render->committed.flip_flags == sprite_renderer_graphics_flip_flags(sprite) && render->committed.y == screen_y && render->committed.scb2 == scb2) {
+            if (render->committed.x == screen_x) {
+                return;
+            }
+
+            render->prepared.hidden = false;
+            render->prepared.per_column = false;
+            render->prepared.draw_x = screen_x;
+            render->prepared.draw_y = screen_y;
+            render->prepared.scb2 = scb2;
+            unsigned_sprite_render_mark_dirty(render, U_SPRITE_RENDER_DIRTY_X);
+            render->prepared.valid = true;
             return;
         }
 

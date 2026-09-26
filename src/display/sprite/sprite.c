@@ -17,9 +17,13 @@ static void sprite_playback_revision_advance(USprite *sprite) {
 
 /** Returns whether batched frame advancement can preserve all gameplay-visible semantics. */
 static bool sprite_animation_can_batch(const UAnimation *animation) {
+    const UCollisionBox *stable_hurtbox = animation->frames[0].hurtbox;
+
     for (u8 i = 0u; i < animation->count; ++i) {
         const UFrame *frame = &animation->frames[i];
-        if (frame->hitbox != NULL || frame->hurtbox != NULL || (frame->callbacks != NULL && frame->callbacks->count > 0u)) {
+        /* Attack frames and callbacks are timing-sensitive. A hurtbox is not when every frame
+         * references the exact same immutable box: batching cannot change collision geometry. */
+        if (frame->hitbox != NULL || frame->hurtbox != stable_hurtbox || (frame->callbacks != NULL && frame->callbacks->count > 0u)) {
             return false;
         }
     }

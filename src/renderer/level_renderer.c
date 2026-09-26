@@ -133,7 +133,7 @@ void unsigned_level_renderer_prepare(ULevelRenderer *renderer, ULevel *level, co
         unsigned_actor_renderer_force_rebuild_prepared(&level->actors);
     }
     level_renderer_plan_old_actor_clear(renderer, plan);
-    unsigned_actor_renderer_prepare_draws(&level->actors, viewport, &plan->frame, &plan->sprite_columns);
+    unsigned_actor_renderer_prepare_draws(&level->actors, viewport, &plan->frame, &plan->sprite_columns, &plan->actors);
 
     unsigned_background_renderer_prepare(&renderer->background, &level->background, viewport, &plan->background, &plan->frame);
 
@@ -145,7 +145,9 @@ static void level_renderer_commit_critical(ULevelRenderPlan *plan) {
         unsigned_sprite_renderer_clear_range(plan->clear_actor_first_sprite, plan->clear_actor_sprite_count);
     }
 
-    unsigned_actor_renderer_precommit_chain_boundaries(&plan->level->actors);
+    if (plan->actors.has_chain_boundary_work) {
+        unsigned_actor_renderer_precommit_chain_boundaries(&plan->level->actors);
+    }
 }
 
 /** Publish the actor ownership snapshot produced by the prepared frame. */
@@ -187,7 +189,7 @@ void unsigned_level_renderer_commit(ULevelRenderer *renderer) {
     }
 
     /* HIGH: fully rebuild/move actor sprites before any normal-priority background traffic. */
-    unsigned_actor_renderer_commit_prepared(&plan->level->actors);
+    unsigned_actor_renderer_commit_prepared(&plan->level->actors, &plan->actors);
 
     /* NORMAL: scrolling background uploads/transforms run after actor state is coherent. */
     unsigned_background_renderer_commit(&renderer->background, &plan->background);

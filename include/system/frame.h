@@ -48,4 +48,12 @@ void unsigned_frame_begin(void);
  */
 u32 unsigned_frame_end(void);
 
+/**
+ * @brief Converts used 68000 cycles to a whole percentage of the sampled frame budget.
+ *
+ * @details Truncates fractional percentages and allows values above 100 when combining intervals.
+ * @pre unsigned_frame_begin() has sampled the video mode.
+ */
+u32 unsigned_frame_usage_percent(u32 used_cycles);
+
 #endif

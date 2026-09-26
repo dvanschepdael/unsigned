@@ -7,6 +7,7 @@
 #define UNSIGNED_RENDERER_LEVEL_RENDERER_H
 
 #include "level/level_definition.h"
+#include "renderer/actor_renderer.h"
 #include "renderer/background_renderer.h"
 #include "renderer/render_plan.h"
 #include "renderer/sprite_column_plan.h"
@@ -15,6 +16,7 @@ typedef struct ULevelRenderPlan {
     URenderPlan frame;
     USpriteColumnPlanBuffer sprite_columns;
     UBackgroundRenderPlan background;
+    UActorRenderPlan actors;
     ULevel *level;
     u16 actor_first_sprite;
     u16 actor_sprite_count;

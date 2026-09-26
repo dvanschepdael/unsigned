@@ -13,6 +13,11 @@ void unsigned_neo_geo_fix_clear(void) {
     bios_fix_clear();
 }
 
+/** Draw one normal-height FIX text line at an explicit tile position. */
+void unsigned_neo_geo_fix_text(u8 column, u8 row, u8 palette, const char *text) {
+    ng_text_args(column, row, palette, SROM_TXT_TILE_OFFSET, text);
+}
+
 /** Center one normal-height FIX text line using the requested palette. */
 void unsigned_neo_geo_fix_center_text(u8 row, u8 palette, const char *text) {
     ng_center_text(row, palette, text);

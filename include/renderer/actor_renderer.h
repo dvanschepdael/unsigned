@@ -11,6 +11,16 @@
 #include "renderer/render_plan.h"
 #include "renderer/sprite_column_plan.h"
 
+/** Small actor-only work summary built during CPU preparation. */
+typedef struct UActorRenderPlan {
+    /** Pure SCB3/SCB4 position axes that may be committed through cross-sprite batching. */
+    u8 driver_dirty;
+    /** True when at least one prepared sprite needs work beyond a pure batched driver update. */
+    bool has_non_driver_work;
+    /** True when at least one prepared sprite must sever a previous sticky SCB3 chain. */
+    bool has_chain_boundary_work;
+} UActorRenderPlan;
+
 /**
  * Cache actor visibility and compute the hardware-sprite span required by the batch.
  *
@@ -30,7 +40,7 @@ void unsigned_actor_renderer_prepare(UActorContainer *actors, const UViewport *v
 void unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_sprite, bool reserve_hidden);
 
 /** CPU-only transform/effect preparation for every sprite in the prepared actor batch. */
-void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer);
+void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan);
 
 /** Force every visible prepared sprite to rebuild all hardware state on the next commit. */
 void unsigned_actor_renderer_force_rebuild_prepared(UActorContainer *actors);
@@ -45,6 +55,6 @@ void unsigned_actor_renderer_precommit_chain_boundaries(UActorContainer *actors)
  * Commit the complete prepared actor batch in hardware ownership order.
  * Driver-only moves are batched first, then all underlays, then all actor bodies.
  */
-void unsigned_actor_renderer_commit_prepared(UActorContainer *actors);
+void unsigned_actor_renderer_commit_prepared(UActorContainer *actors, const UActorRenderPlan *actor_plan);
 
 #endif

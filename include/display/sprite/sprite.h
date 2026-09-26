@@ -99,7 +99,7 @@ typedef struct USprite {
     /** Compact runtime storage; public APIs still use UAnimationPlayback/UAnimationState enums. */
     u8 playback;
     u8 state;
-    /** Cached once per selected animation: no callbacks or frame collision boxes, so elapsed ticks may be batched safely. */
+    /** Cached once per selected animation: no callbacks/hitboxes and at most one unchanged hurtbox, so elapsed ticks may be batched safely. */
     bool batchable_animation;
     /** Changes whenever playback is explicitly selected/restarted; presentation schedulers use it to bound catch-up. */
     u16 playback_revision;
