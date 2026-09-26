@@ -16,10 +16,7 @@ static UEffectBounds bob_bounds(u8 column_count, const void *context) {
     const UBobEffect *bob = context;
     (void)column_count;
 
-    return (UEffectBounds){
-        .offset_x = unsigned_effect_abs_s16(bob->amplitude_x),
-        .offset_y = unsigned_effect_abs_s16(bob->amplitude_y),
-    };
+    return unsigned_effect_translation_bounds(bob->amplitude_x, bob->amplitude_y);
 }
 
 static void bob_sample(UEffectSample *sample, u8 column, u8 column_count, u8 phase, const void *context) {

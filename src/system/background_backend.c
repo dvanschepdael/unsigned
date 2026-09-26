@@ -26,9 +26,13 @@ static u16 background_backend_scb3(const UBackgroundLayerDefinition *definition,
 static void background_backend_write_shrink(const UBackgroundLayerDefinition *definition, u8 columns, u16 scb2) {
     unsigned_neogeo_vram_set_mod(1u);
     *REG_VRAMADDR = (u16)(ADDR_SCB2 + definition->first_sprite);
+#if defined(__m68k__)
+    unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, scb2, columns);
+#else
     for (u8 slot = 0u; slot < columns; ++slot) {
         *REG_VRAMRW = scb2;
     }
+#endif
 }
 
 /** Rebuilds SCB3 chain drivers/sticky links for the ring-buffer layout, including the wrap split when present. */
@@ -37,10 +41,29 @@ static void background_backend_write_chain(const UBackgroundLayerDefinition *def
 
     unsigned_neogeo_vram_set_mod(1u);
     *REG_VRAMADDR = (u16)(ADDR_SCB3 + definition->first_sprite);
+#if defined(__m68k__)
+    if (leftmost_slot == 0u) {
+        *REG_VRAMRW = driver_scb3;
+        if (columns > 1u) {
+            unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, BACKGROUND_SCB3_STICKY, (u16)(columns - 1u));
+        }
+        return;
+    }
+
+    *REG_VRAMRW = driver_scb3;
+    if (leftmost_slot > 1u) {
+        unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, BACKGROUND_SCB3_STICKY, (u16)(leftmost_slot - 1u));
+    }
+    *REG_VRAMRW = driver_scb3;
+    if ((u8)(leftmost_slot + 1u) < columns) {
+        unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, BACKGROUND_SCB3_STICKY, (u16)(columns - leftmost_slot - 1u));
+    }
+#else
     for (u8 slot = 0u; slot < columns; ++slot) {
         const bool driver = slot == leftmost_slot || (leftmost_slot != 0u && slot == 0u);
         *REG_VRAMRW = driver ? driver_scb3 : BACKGROUND_SCB3_STICKY;
     }
+#endif
 }
 
 /** Uploads one chain-driver X coordinate to SCB4 in Neo Geo fixed hardware units. */
@@ -108,16 +131,24 @@ void unsigned_background_backend_write_column(const UBackgroundLayerDefinition *
     *REG_VRAMADDR = (u16)(ADDR_SCB1 + (definition->first_sprite + physical_slot) * 64u);
     if (full) {
         const u16 attributes = (u16)(((u16)definition->palette << 8u) | definition->auto_animation);
+#if defined(__m68k__)
+        unsigned_m68k_vram_stream_tile_attributes(REG_VRAMRW, tile, attributes, definition->height_tiles, (s16)definition->width_tiles);
+#else
         for (u8 row = 0u; row < definition->height_tiles; ++row) {
             *REG_VRAMRW = tile;
             *REG_VRAMRW = attributes;
             tile = (u16)(tile + definition->width_tiles);
         }
+#endif
     } else {
+#if defined(__m68k__)
+        unsigned_m68k_vram_stream_arithmetic(REG_VRAMRW, tile, definition->height_tiles, (s16)definition->width_tiles);
+#else
         for (u8 row = 0u; row < definition->height_tiles; ++row) {
             *REG_VRAMRW = tile;
             tile = (u16)(tile + definition->width_tiles);
         }
+#endif
     }
 }
 
@@ -138,8 +169,8 @@ void unsigned_background_backend_flush_chained(const UBackgroundLayerDefinition 
     }
 }
 
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
-/** Stream one contiguous segment of a prepared SCB plane through the guarded DBRA hot path. */
+#if defined(__m68k__)
+/** Stream one contiguous segment of a prepared SCB plane through the native DBRA hot path. */
 static void background_backend_stream_prepared_segment(u16 vram_address, const u16 *source, u8 count) {
     if (count == 0u) {
         return;
@@ -177,7 +208,7 @@ void unsigned_background_backend_write_prepared_effect_columns(const UBackground
 
     unsigned_neogeo_vram_set_mod(1u);
 
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
+#if defined(__m68k__)
     /* Prepared columns are in logical screen order while the hardware ring may wrap once.
      * Stream each SCB plane as one or two contiguous destination segments. */
     const u8 first_segment = (u8)(columns - leftmost_slot);
@@ -227,9 +258,5 @@ void unsigned_background_backend_write_prepared_effect_columns(const UBackground
 }
 
 void unsigned_background_backend_hide_range(u16 first_sprite, u8 columns) {
-    unsigned_neogeo_vram_set_mod(1u);
-    *REG_VRAMADDR = (u16)(ADDR_SCB3 + first_sprite);
-    for (u8 column = 0u; column < columns; ++column) {
-        *REG_VRAMRW = 0u;
-    }
+    unsigned_neogeo_vram_clear_scb3_range(first_sprite, columns);
 }

@@ -26,38 +26,40 @@ void unsigned_ui_selector_init(UUISelector *selector, const UUISelectorConfig *c
     selector->selected_index = config->option_count == 0u ? 0u : config->selected_index;
 }
 
-bool unsigned_ui_selector_previous(UUISelector *selector) {
-    if (selector->option_count == 0) {
+/** Move the current option by one step using the selector's shared wrap policy. */
+static bool unsigned_ui_selector_move(UUISelector *selector, bool forward) {
+    if (selector->option_count == 0u) {
         return false;
     }
 
-    if (selector->selected_index > 0) {
-        --selector->selected_index;
-    } else if (selector->wrap && selector->option_count > 1) {
-        selector->selected_index = (u8)(selector->option_count - 1);
+    if (forward) {
+        if ((u8)(selector->selected_index + 1u) < selector->option_count) {
+            ++selector->selected_index;
+        } else if (selector->wrap && selector->option_count > 1u) {
+            selector->selected_index = 0u;
+        } else {
+            return false;
+        }
     } else {
-        return false;
+        if (selector->selected_index > 0u) {
+            --selector->selected_index;
+        } else if (selector->wrap && selector->option_count > 1u) {
+            selector->selected_index = (u8)(selector->option_count - 1u);
+        } else {
+            return false;
+        }
     }
 
     unsigned_ui_selector_notify(selector);
     return true;
 }
 
+bool unsigned_ui_selector_previous(UUISelector *selector) {
+    return unsigned_ui_selector_move(selector, false);
+}
+
 bool unsigned_ui_selector_next(UUISelector *selector) {
-    if (selector->option_count == 0) {
-        return false;
-    }
-
-    if ((u8)(selector->selected_index + 1) < selector->option_count) {
-        ++selector->selected_index;
-    } else if (selector->wrap && selector->option_count > 1) {
-        selector->selected_index = 0;
-    } else {
-        return false;
-    }
-
-    unsigned_ui_selector_notify(selector);
-    return true;
+    return unsigned_ui_selector_move(selector, true);
 }
 
 void unsigned_ui_selector_set_selected(UUISelector *selector, u8 selected_index) {

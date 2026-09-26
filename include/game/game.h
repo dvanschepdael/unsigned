@@ -114,7 +114,7 @@ void unsigned_game_instance_prepare_render(UGameInstance *game);
  * Commit the level plan prepared during active display.
  * @pre `game` is valid and `unsigned_game_instance_prepare_render()` was called for this frame.
  */
-void unsigned_game_instance_render(UGameInstance *game);
+void unsigned_game_instance_commit_render(UGameInstance *game);
 
 /** Tear down runtime-owned state; backing arrays in `UGameInstanceStorage` remain caller-owned. */
 void unsigned_game_instance_destroy(UGameInstance *game);

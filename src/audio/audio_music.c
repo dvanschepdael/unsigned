@@ -1,7 +1,7 @@
 #include "audio/audio_music_internal.h"
 
 static void unsigned_audio_music_reset_player(UAudioMusicPlayer *player) {
-    *player = (UAudioMusicPlayer){0};
+    *player = (UAudioMusicPlayer){ 0 };
     player->current_state = U_AUDIO_MUSIC_STATE_NONE;
     player->requested_state = U_AUDIO_MUSIC_STATE_NONE;
 }

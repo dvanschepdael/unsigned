@@ -37,7 +37,9 @@ typedef struct UUIBlinkLabel {
 void unsigned_ui_blink_label_init(UUIBlinkLabel *blink_label, const UUIBlinkLabelConfig *config);
 
 /**
- * @brief Sets text on the UI blink label.
+ * @brief Sets text on the UI blink label and refreshes its visible/clear presentation when changed.
+ *
+ * Reapplying the same text pointer is a no-op; blink ticks/reset remain responsible for visibility.
  *
  * @param blink_label Blinking label widget to configure or update.
  * @param text Text content consumed by formatting or rendering.

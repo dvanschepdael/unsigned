@@ -22,6 +22,12 @@ void unsigned_input_controller_tick(UInputController *controller, UInputMask but
     controller->state.released = released;
     controller->state.hold = 0u;
 
+    /* Idle controllers dominate most frames; counters are already zero once no button was down
+     * on the previous frame, so skip the per-button hold scan entirely. */
+    if ((buttons_down | previous_buttons) == 0u) {
+        return;
+    }
+
     UInputMask button_mask = 1u;
     for (u8 button = 0u; button < UNSIGNED_INPUT_BUTTONS; ++button, button_mask = (UInputMask)(button_mask << 1u)) {
         u8 frames = controller->buttons[button];
@@ -41,19 +47,9 @@ void unsigned_input_controller_tick(UInputController *controller, UInputMask but
 }
 
 Vec2 unsigned_input_direction(const UInputState *input) {
-    Vec2 direction = {0};
-
-    if ((input->down & U_INPUT_BUTTON_LEFT) != 0u) {
-        --direction.x;
-    }
-    if ((input->down & U_INPUT_BUTTON_RIGHT) != 0u) {
-        ++direction.x;
-    }
-    if ((input->down & U_INPUT_BUTTON_UP) != 0u) {
-        --direction.y;
-    }
-    if ((input->down & U_INPUT_BUTTON_DOWN) != 0u) {
-        ++direction.y;
-    }
-    return direction;
+    const UInputMask buttons = input->down;
+    return (Vec2){
+        .x = (s16)(((buttons & U_INPUT_BUTTON_RIGHT) != 0u) - ((buttons & U_INPUT_BUTTON_LEFT) != 0u)),
+        .y = (s16)(((buttons & U_INPUT_BUTTON_DOWN) != 0u) - ((buttons & U_INPUT_BUTTON_UP) != 0u)),
+    };
 }

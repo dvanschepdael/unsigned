@@ -6,10 +6,9 @@
 #include "actor/player_pool.h"
 
 UPlayerPoolInstance *unsigned_player_pool_reserve(UPoolInstanceContainer *pool, UPlayer *player, u8 controller_index) {
-    UPlayerPoolInstance *instance = unsigned_pool_reserve(pool);
+    UPlayerPoolInstance *instance = unsigned_pool_reserve_args(pool, player);
 
     player->controller_index = controller_index;
-    instance->args = player;
 
     return instance;
 }

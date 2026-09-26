@@ -11,12 +11,12 @@
 
 #include "save/save_backend.h"
 #include "save/save_internal.h"
+#include "system/session.h"
 
 #include <ngdevkit/backup-ram.h>
 #include <ngdevkit/bios-ram.h>
 #include <ngdevkit/memory-card.h>
 
-#define UNSIGNED_SYSTEM_MVS 0x80u
 
 static u8 _backup_ram bram_records[UNSIGNED_SAVE_SLOT_COUNT][UNSIGNED_SAVE_RECORD_SIZE];
 
@@ -45,13 +45,13 @@ UStorage unsigned_save_backend_resolve(UStorage requested) {
     if (requested != U_STORAGE_AUTO) {
         return requested;
     }
-    return bios_mvs_flag == UNSIGNED_SYSTEM_MVS ? U_STORAGE_BACKUP_RAM : U_STORAGE_MEMORY_CARD;
+    return bios_mvs_flag == U_NEO_GEO_SYSTEM_MVS ? U_STORAGE_BACKUP_RAM : U_STORAGE_MEMORY_CARD;
 }
 
 bool unsigned_save_backend_available(UStorage storage) {
     switch (unsigned_save_backend_resolve(storage)) {
     case U_STORAGE_BACKUP_RAM:
-        return bios_mvs_flag == UNSIGNED_SYSTEM_MVS;
+        return bios_mvs_flag == U_NEO_GEO_SYSTEM_MVS;
     case U_STORAGE_MEMORY_CARD:
         return ng_memory_card_inserted();
     default:
@@ -107,7 +107,7 @@ USaveState unsigned_save_backend_read_record(UStorage storage, u16 ngh_bcd, u8 s
         return save_backend_map_card_error(bios_card_answer);
 
     case U_STORAGE_BACKUP_RAM:
-        if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {
+        if (bios_mvs_flag != U_NEO_GEO_SYSTEM_MVS) {
             return U_SAVE_ERROR_UNSUPPORTED;
         }
         unsigned_save_copy_bytes(record, bram_records[slot], UNSIGNED_SAVE_RECORD_SIZE);
@@ -132,7 +132,7 @@ USaveState unsigned_save_backend_write_record(UStorage storage, u16 ngh_bcd, u8 
     }
 
     case U_STORAGE_BACKUP_RAM:
-        if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {
+        if (bios_mvs_flag != U_NEO_GEO_SYSTEM_MVS) {
             return U_SAVE_ERROR_UNSUPPORTED;
         }
         unsigned_save_copy_bytes(bram_records[slot], record, UNSIGNED_SAVE_RECORD_SIZE);
@@ -158,12 +158,10 @@ USaveState unsigned_save_backend_delete_record(UStorage storage, u16 ngh_bcd, u8
     }
 
     case U_STORAGE_BACKUP_RAM:
-        if (bios_mvs_flag != UNSIGNED_SYSTEM_MVS) {
+        if (bios_mvs_flag != U_NEO_GEO_SYSTEM_MVS) {
             return U_SAVE_ERROR_UNSUPPORTED;
         }
-        for (u16 i = 0u; i < UNSIGNED_SAVE_RECORD_SIZE; ++i) {
-            bram_records[slot][i] = 0u;
-        }
+        unsigned_save_clear_bytes(bram_records[slot], UNSIGNED_SAVE_RECORD_SIZE);
         return U_SAVE_OK;
 
     default:

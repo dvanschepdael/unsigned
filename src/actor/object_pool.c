@@ -6,11 +6,7 @@
 #include "actor/object_pool.h"
 
 UObjectPoolInstance *unsigned_object_pool_reserve(UPoolInstanceContainer *pool, UObject *object) {
-    UObjectPoolInstance *instance = unsigned_pool_reserve(pool);
-
-    instance->args = object;
-
-    return instance;
+    return unsigned_pool_reserve_args(pool, object);
 }
 
 void unsigned_object_pool_release(UPoolInstanceContainer *pool, UObjectPoolInstance *instance) {

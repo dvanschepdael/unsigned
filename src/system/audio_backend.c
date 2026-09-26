@@ -1,6 +1,8 @@
 #include "audio/audio_backend.h"
 
 #include "system/audio_backend_internal.h"
+
+#include "audio/audio_queue_internal.h"
 #include "system/config.h"
 
 #include <ngdevkit/backup-ram.h>
@@ -65,33 +67,15 @@ static void neo_geo_audio_transport_write(USoundCommand command) {
     *REG_SOUND = command;
 }
 
-/** Resolve one queue-relative offset in the fixed transport ring. */
-static inline u8 neo_geo_audio_queue_index(u8 offset) {
-    u16 index = (u16)neo_geo_audio_queue_head + offset;
-    if (index >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
-        index -= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY;
-    }
-    return (u8)index;
-}
-
 /** Clear volatile deferred-coin playback state. */
 static void neo_geo_audio_clear_deferred_coin_state(void) {
     neo_geo_audio_deferred_coin_command = U_AUDIO_COMMAND_NONE;
     neo_geo_audio_deferred_coin_count = 0u;
 }
 
-static void neo_geo_audio_transport_clear_queue(void) {
-    for (u8 i = 0u; i < neo_geo_audio_queue_count; ++i) {
-        neo_geo_audio_queue[neo_geo_audio_queue_index(i)] = U_AUDIO_COMMAND_NONE;
-    }
-
-    neo_geo_audio_queue_head = 0u;
-    neo_geo_audio_queue_count = 0u;
-}
-
 /** Reset volatile 68k -> Z80 transport state without touching the persistent BIOS handoff token. */
 static void neo_geo_audio_transport_reset_state(void) {
-    neo_geo_audio_transport_clear_queue();
+    unsigned_audio_queue_reset(&neo_geo_audio_queue_head, &neo_geo_audio_queue_count);
     neo_geo_audio_bios_sound_sent = false;
     neo_geo_audio_clear_deferred_coin_state();
 }
@@ -101,13 +85,7 @@ void neo_geo_audio_transport_init(void) {
 }
 
 bool unsigned_audio_backend_send(USoundCommand command) {
-    if (neo_geo_audio_queue_count >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
-        return false;
-    }
-
-    neo_geo_audio_queue[neo_geo_audio_queue_index(neo_geo_audio_queue_count)] = command;
-    ++neo_geo_audio_queue_count;
-    return true;
+    return unsigned_audio_queue_push(neo_geo_audio_queue, &neo_geo_audio_queue_head, &neo_geo_audio_queue_count, UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY, command);
 }
 
 void neo_geo_audio_transport_tick(void) {
@@ -135,18 +113,10 @@ void neo_geo_audio_transport_tick(void) {
         return;
     }
 
-    if (neo_geo_audio_queue_count == 0u) {
+    const USoundCommand command = unsigned_audio_queue_pop(neo_geo_audio_queue, &neo_geo_audio_queue_head, &neo_geo_audio_queue_count, UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY);
+    if (command == U_AUDIO_COMMAND_NONE) {
         return;
     }
-
-    const USoundCommand command = neo_geo_audio_queue[neo_geo_audio_queue_head];
-    neo_geo_audio_queue[neo_geo_audio_queue_head] = U_AUDIO_COMMAND_NONE;
-
-    ++neo_geo_audio_queue_head;
-    if (neo_geo_audio_queue_head >= UNSIGNED_NEO_GEO_AUDIO_TRANSPORT_QUEUE_CAPACITY) {
-        neo_geo_audio_queue_head = 0u;
-    }
-    --neo_geo_audio_queue_count;
 
     neo_geo_audio_transport_write(command);
 }

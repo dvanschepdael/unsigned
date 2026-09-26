@@ -1,12 +1,12 @@
 #include "display/ui/widget/button.h"
 
-void unsigned_ui_button_init(UUIButton *button, UUIRect bounds, UUIStyleId style, const char *text, UUIButtonPressedCallback on_pressed, void *context) {
+void unsigned_ui_button_init(UUIButton *button, const UUIButtonConfig *config) {
     *button = (UUIButton){
-        .text = text,
-        .on_pressed = on_pressed,
-        .context = context,
+        .text = config->text,
+        .on_pressed = config->on_pressed,
+        .context = config->context,
     };
-    unsigned_ui_element_init(&button->element, U_UI_ELEMENT_BUTTON, bounds, style, true);
+    unsigned_ui_element_init(&button->element, U_UI_ELEMENT_BUTTON, config->bounds, config->style, true);
 }
 
 void unsigned_ui_button_press(UUIButton *button) {

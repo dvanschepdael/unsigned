@@ -6,11 +6,10 @@
 #include "gameplay/gameplay_pool.h"
 
 UPoolInstance *unsigned_gameplay_pool_reserve(UPoolInstanceContainer *pool, const UGameplayObject *object, void *args) {
-    UPoolInstance *instance = unsigned_pool_reserve(pool);
+    UPoolInstance *instance = unsigned_pool_reserve_args(pool, args);
 
     instance->key = object->tag;
     instance->object = object;
-    instance->args = args;
     instance->elapsed = 0u;
     instance->duration = object->duration;
     return instance;

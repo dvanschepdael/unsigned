@@ -76,8 +76,8 @@ static void neo_geo_frame(const UNeoGeoRuntimeDefinition *definition, UNeoGeoPha
     /* Keep the audio transport at its existing immediate post-VBlank boundary. */
     neo_geo_audio_transport_tick();
 
-    if (definition->render != NULL) {
-        definition->render(definition->context);
+    if (definition->commit_render != NULL) {
+        definition->commit_render(definition->context);
     }
 
     if (definition->render_phase != NULL) {

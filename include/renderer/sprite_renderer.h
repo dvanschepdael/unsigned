@@ -29,9 +29,6 @@ bool unsigned_sprite_renderer_is_visible_in_bounds(const USprite *sprite, const 
  */
 void unsigned_sprite_renderer_prepare_draw(USprite *sprite, const UViewport *viewport, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer);
 
-/** Add the prepared sprite's expected critical/high VRAM word cost to the supplied accumulators. */
-void unsigned_sprite_renderer_estimate_prepared_vram_words(const USprite *sprite, u32 *critical_words, u32 *high_words);
-
 /**
  * @brief Commit a sprite whose visibility, transforms and optional per-column effects were prepared before VBlank.
  * @pre `sprite` is valid and `sprite->render.prepared.valid` is true.

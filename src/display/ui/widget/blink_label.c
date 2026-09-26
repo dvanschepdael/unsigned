@@ -24,6 +24,9 @@ void unsigned_ui_blink_label_init(UUIBlinkLabel *blink_label, const UUIBlinkLabe
 }
 
 void unsigned_ui_blink_label_set_text(UUIBlinkLabel *blink_label, const char *text) {
+    if (blink_label->visible_text == text) {
+        return;
+    }
     blink_label->visible_text = text;
     unsigned_ui_blink_label_update(blink_label);
 }

@@ -14,6 +14,14 @@
 #define U_UI_PROGRESS_BAR_TILE_SIZE 8u
 #define U_UI_PROGRESS_BAR_HEIGHT 16u
 
+typedef struct UUIProgressBarConfig {
+    s16 x;
+    s16 y;
+    u8 length;
+    u8 palette;
+    const UGameplayAttribute *attribute;
+} UUIProgressBarConfig;
+
 typedef struct UUIProgressBar {
     UUIElement element;
     const UGameplayAttribute *attribute;
@@ -36,15 +44,11 @@ typedef struct UUIProgressBar {
  *
  * @param progress_bar Progress-bar widget to initialize.
  * @pre `progress_bar` is valid.
- * @param x Left position in pixels, snapped down to the FIX grid when rendered.
- * @param y Top position in pixels, snapped down to the FIX grid when rendered.
- * @param length Total width in 8-pixel tiles, including both corners.
- * @pre `length >= 2`.
- * @param palette Neo Geo FIX palette index used by the bar artwork.
- * @pre `palette < 16`.
- * @param attribute Optional caller-owned gameplay attribute to display.
+ * @param config Caller-owned initialization values consumed during the call.
+ * @pre `config->length >= 2`.
+ * @pre `config->palette < 16`.
  */
-void unsigned_ui_progress_bar_init(UUIProgressBar *progress_bar, s16 x, s16 y, u8 length, u8 palette, const UGameplayAttribute *attribute);
+void unsigned_ui_progress_bar_init(UUIProgressBar *progress_bar, const UUIProgressBarConfig *config);
 
 /**
  * @brief Rebinds the progress bar to another gameplay attribute and synchronizes it immediately.

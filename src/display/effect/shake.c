@@ -10,7 +10,7 @@ static UEffectBounds shake_bounds(u8 column_count, const void *context) {
     const UShakeEffect *shake = context;
     (void)column_count;
 
-    return (UEffectBounds){.offset_x = shake->amplitude_x, .offset_y = shake->amplitude_y};
+    return unsigned_effect_translation_bounds(shake->amplitude_x, shake->amplitude_y);
 }
 
 static void shake_sample(UEffectSample *sample, u8 column, u8 column_count, u8 phase, const void *context) {

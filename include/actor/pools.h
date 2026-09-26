@@ -15,11 +15,23 @@ typedef struct UActorPoolSet {
     UPoolInstanceContainer projectiles;
 } UActorPoolSet;
 
+typedef struct UActorPoolSetConfig {
+    UPoolInstance *players;
+    UPoolInstance *npcs;
+    UPoolInstance *objects;
+    UPoolInstance *projectiles;
+    u8 player_capacity;
+    u8 npc_capacity;
+    u8 object_capacity;
+    u8 projectile_capacity;
+} UActorPoolSetConfig;
+
 /**
  * @brief Initializes the actor pools to a valid empty runtime state.
  *
- * @param pools Aggregate actor pool set to initialize or inspect.
+ * @param pools Aggregate actor pool set to initialize.
+ * @param config Caller-owned storage and capacities for each actor class.
  */
-void unsigned_actor_pools_init(UActorPoolSet *pools);
+void unsigned_actor_pools_init(UActorPoolSet *pools, const UActorPoolSetConfig *config);
 
 #endif

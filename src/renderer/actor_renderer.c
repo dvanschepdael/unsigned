@@ -28,15 +28,12 @@ static void actor_prepare_sprite(USprite *sprite, const UViewport *viewport, con
 }
 
 /** Allocate or release one prepared sprite and advance the contiguous actor span. */
-static void actor_layout_sprite(USprite *sprite, u16 *next_sprite, u16 *relocation_count, bool reserve_hidden) {
+static void actor_layout_sprite(USprite *sprite, u16 *next_sprite, bool reserve_hidden) {
     if (!reserve_hidden && !sprite->render.layout.visible) {
         unsigned_sprite_renderer_unassign(sprite);
         return;
     }
 
-    if (sprite->render.layout.first_sprite != *next_sprite) {
-        ++(*relocation_count);
-    }
     unsigned_sprite_renderer_relocate(sprite, *next_sprite);
     *next_sprite += sprite->render.layout.sprite_count;
 }
@@ -167,9 +164,8 @@ void unsigned_actor_renderer_prepare(UActorContainer *actors, const UViewport *v
     *min_first_sprite = minimum;
 }
 
-u16 unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_sprite, bool reserve_hidden) {
+void unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_sprite, bool reserve_hidden) {
     u16 next_sprite = first_sprite;
-    u16 relocation_count = 0u;
     bool stable_relocation = false;
 
     /* Only stable layouts can safely reuse prior slot contents: every hidden actor still owns
@@ -187,14 +183,14 @@ u16 unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_s
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
         if (actor->underlay != NULL) {
-            actor_layout_sprite(actor->underlay, &next_sprite, &relocation_count, reserve_hidden);
+            actor_layout_sprite(actor->underlay, &next_sprite, reserve_hidden);
         }
     }
 
     /* Actor bodies keep the already-sorted actor order after the underlay span. */
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
-        actor_layout_sprite(&actor->sprite, &next_sprite, &relocation_count, reserve_hidden);
+        actor_layout_sprite(&actor->sprite, &next_sprite, reserve_hidden);
     }
 
     if (stable_relocation) {
@@ -202,7 +198,6 @@ u16 unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_s
         actor_renderer_reuse_relocated_graphics(actors, false);
     }
 
-    return relocation_count;
 }
 
 void unsigned_actor_renderer_force_rebuild_prepared(UActorContainer *actors) {
@@ -227,11 +222,6 @@ void unsigned_actor_renderer_force_rebuild_prepared(UActorContainer *actors) {
 }
 
 void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer) {
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-    u32 critical_words = 0u;
-    u32 high_words = 0u;
-#endif
-
     /* Match commit order: all ground underlays first, then actor bodies. */
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
@@ -239,14 +229,7 @@ void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewp
         if (underlay != NULL) {
             unsigned_sprite_renderer_prepare_draw(underlay, viewport, &actor->position, column_buffer);
             if (underlay->render.prepared.valid) {
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-                unsigned_sprite_renderer_estimate_prepared_vram_words(underlay, &critical_words, &high_words);
-                if (underlay->render.layout.visible) {
-                    plan->stats.actor_sprite_columns += underlay->render.layout.sprite_count;
-                }
-#else
                 unsigned_render_plan_mark_work(plan);
-#endif
             }
         }
     }
@@ -255,21 +238,9 @@ void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewp
         UActor *actor = actors->instances[i];
         unsigned_sprite_renderer_prepare_draw(&actor->sprite, viewport, &actor->position, column_buffer);
         if (actor->sprite.render.prepared.valid) {
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-            unsigned_sprite_renderer_estimate_prepared_vram_words(&actor->sprite, &critical_words, &high_words);
-            if (actor->sprite.render.layout.visible) {
-                plan->stats.actor_sprite_columns += actor->sprite.render.layout.sprite_count;
-            }
-#else
             unsigned_render_plan_mark_work(plan);
-#endif
         }
     }
-
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-    unsigned_render_plan_add_words(plan, U_RENDER_PRIORITY_CRITICAL, critical_words);
-    unsigned_render_plan_add_words(plan, U_RENDER_PRIORITY_HIGH, high_words);
-#endif
 }
 
 /** Return one active sprite from the hardware-layout pass selected by `underlays`. */

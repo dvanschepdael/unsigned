@@ -21,10 +21,7 @@ static UEffectBounds wave_bounds(u8 column_count, const void *context) {
     const UWaveEffect *wave = context;
     (void)column_count;
 
-    return (UEffectBounds){
-        .offset_x = unsigned_effect_abs_s16(wave->amplitude_x),
-        .offset_y = unsigned_effect_abs_s16(wave->amplitude_y),
-    };
+    return unsigned_effect_translation_bounds(wave->amplitude_x, wave->amplitude_y);
 }
 
 static void wave_sample(UEffectSample *sample, u8 column, u8 column_count, u8 phase, const void *context) {

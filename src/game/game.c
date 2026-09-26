@@ -11,31 +11,16 @@
 
 /** Configure fixed-capacity actor pools and the gameplay runtime that operates on them. */
 static void game_instance_init_actor_runtime(UGameInstance *game, const UGameInstanceConfig *config) {
-
-    game->actor_pools = (UActorPoolSet){
-        .players =
-            {
-                .capacity = config->player_capacity,
-                .instances = config->storage.players,
-            },
-        .npcs =
-            {
-                .capacity = config->npc_capacity,
-                .instances = config->storage.npcs,
-            },
-        .objects =
-            {
-                .capacity = config->object_capacity,
-                .instances = config->storage.objects,
-            },
-        .projectiles =
-            {
-                .capacity = config->projectile_capacity,
-                .instances = config->storage.projectiles,
-            },
-    };
-
-    unsigned_actor_pools_init(&game->actor_pools);
+    unsigned_actor_pools_init(&game->actor_pools, &(UActorPoolSetConfig){
+        .players = config->storage.players,
+        .npcs = config->storage.npcs,
+        .objects = config->storage.objects,
+        .projectiles = config->storage.projectiles,
+        .player_capacity = config->player_capacity,
+        .npc_capacity = config->npc_capacity,
+        .object_capacity = config->object_capacity,
+        .projectile_capacity = config->projectile_capacity,
+    });
     unsigned_gameplay_runtime_init(&game->gameplay);
 }
 
@@ -106,7 +91,7 @@ void unsigned_game_instance_prepare_render(UGameInstance *game) {
     unsigned_level_renderer_prepare(&game->renderer, &game->level, &game->viewport);
 }
 
-void unsigned_game_instance_render(UGameInstance *game) {
+void unsigned_game_instance_commit_render(UGameInstance *game) {
     unsigned_level_renderer_commit(&game->renderer);
 }
 

@@ -31,15 +31,15 @@ static u16 progress_bar_from_range(s16 current, s16 minimum, s16 maximum) {
     return progress_bar_from_ratio(position, span);
 }
 
-void unsigned_ui_progress_bar_init(UUIProgressBar *progress_bar, s16 x, s16 y, u8 length, u8 palette, const UGameplayAttribute *attribute) {
+void unsigned_ui_progress_bar_init(UUIProgressBar *progress_bar, const UUIProgressBarConfig *config) {
     *progress_bar = (UUIProgressBar){
-        .attribute = attribute,
-        .palette = palette,
+        .attribute = config->attribute,
+        .palette = config->palette,
     };
     const UUIRect bounds = {
-        .x = x,
-        .y = y,
-        .width = (u16)(length * U_UI_PROGRESS_BAR_TILE_SIZE),
+        .x = config->x,
+        .y = config->y,
+        .width = (u16)(config->length * U_UI_PROGRESS_BAR_TILE_SIZE),
         .height = U_UI_PROGRESS_BAR_HEIGHT,
     };
     unsigned_ui_element_init(&progress_bar->element, U_UI_ELEMENT_PROGRESS_BAR, bounds, 0u, false);

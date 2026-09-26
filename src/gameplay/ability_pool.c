@@ -10,10 +10,7 @@ static void ability_pool_release_callback(void *context, UPoolInstance *instance
 }
 
 void unsigned_gameplay_ability_pool_init(UAbilityPool *abilities) {
-    *abilities = (UAbilityPool){0};
-    abilities->pool.capacity = UNSIGNED_GAMEPLAY_MAX_ABILITY;
-    abilities->pool.instances = abilities->instances;
-    unsigned_pool_init(&abilities->pool);
+    unsigned_pool_init(&abilities->pool, abilities->instances, ARRAY_COUNT_U8(abilities->instances));
 }
 
 void unsigned_gameplay_ability_pool_clear(UAbilityPool *abilities) {

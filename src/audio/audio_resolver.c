@@ -7,18 +7,13 @@
 #include "audio/config.h"
 #include "core/math/math.h"
 
-/** Selects a uniformly random audio command variant. */
-static u8 audio_select_random(u8 variant_count, u16 *random_state) {
-    return (u8)(unsigned_math_random_u16(random_state) % variant_count);
-}
-
 /** Selects a random audio variant while avoiding the previous choice when possible. */
 static u8 audio_select_random_no_repeat(u8 variant_count, UAudioSelectionState *state, u16 *random_state) {
     if (variant_count < 2u || state->previous_index >= variant_count) {
-        return audio_select_random(variant_count, random_state);
+        return (u8)unsigned_math_random_bounded_u16(random_state, variant_count);
     }
 
-    u8 selected = (u8)(unsigned_math_random_u16(random_state) % (variant_count - 1u));
+    u8 selected = (u8)unsigned_math_random_bounded_u16(random_state, (u16)(variant_count - 1u));
     if (selected >= state->previous_index) {
         ++selected;
     }
@@ -32,7 +27,7 @@ static u8 audio_select_weighted(const UAudioVariant *variants, u8 variant_count,
     for (u8 i = 0u; i < variant_count; ++i) {
         total = (u16)(total + variants[i].weight);
     }
-    u16 selected_weight = (u16)(unsigned_math_random_u16(random_state) % total);
+    u16 selected_weight = unsigned_math_random_bounded_u16(random_state, total);
     for (u8 i = 0u; i < variant_count; ++i) {
         if (selected_weight < variants[i].weight) {
             return i;
@@ -65,7 +60,7 @@ static u8 audio_select_shuffle(u8 variant_count, UAudioSelectionState *state, u1
             ++remaining_count;
         }
     }
-    u8 selected_remaining = (u8)(unsigned_math_random_u16(random_state) % remaining_count);
+    u8 selected_remaining = (u8)unsigned_math_random_bounded_u16(random_state, remaining_count);
     bit = 1u;
     for (u8 i = 0u; i < variant_count; ++i, bit = (u16)(bit << 1u)) {
         if ((selection_mask & bit) == 0u) {
@@ -95,7 +90,7 @@ u8 unsigned_audio_resolve_selection(UAudioSelectionMode mode, const UAudioVarian
     case U_AUDIO_SELECT_FIRST:
         return 0u;
     case U_AUDIO_SELECT_RANDOM:
-        return audio_select_random(variant_count, random_state);
+        return (u8)unsigned_math_random_bounded_u16(random_state, variant_count);
     case U_AUDIO_SELECT_RANDOM_NO_REPEAT:
         return audio_select_random_no_repeat(variant_count, state, random_state);
     case U_AUDIO_SELECT_WEIGHTED:

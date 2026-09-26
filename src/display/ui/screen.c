@@ -5,6 +5,8 @@
 
 #include "display/ui/screen.h"
 
+#include "display/ui/collection_internal.h"
+
 #include "display/ui/widget/button.h"
 #include "display/ui/widget/image.h"
 #include "display/ui/widget/label.h"
@@ -65,20 +67,11 @@ void unsigned_ui_screen_init(UUIScreen *screen) {
 }
 
 void unsigned_ui_screen_add(UUIScreen *screen, UUIElement *element) {
-    screen->elements[screen->count] = element;
-    ++screen->count;
+    unsigned_ui_collection_add(screen->elements, &screen->count, element);
 }
 
 void unsigned_ui_screen_remove(UUIScreen *screen, UUIElement *element) {
-    u8 index = 0u;
-    while (screen->elements[index] != element) {
-        ++index;
-    }
-
-    for (u8 i = index; i + 1u < screen->count; ++i) {
-        screen->elements[i] = screen->elements[i + 1u];
-    }
-    --screen->count;
+    screen->count = unsigned_ui_collection_remove(screen->elements, screen->count, element);
 }
 
 void unsigned_ui_screen_render(const UUIScreen *screen, const UUIRenderer *renderer) {

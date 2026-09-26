@@ -11,6 +11,14 @@
 typedef struct UUIButton UUIButton;
 typedef void (*UUIButtonPressedCallback)(UUIButton *button, void *context);
 
+typedef struct UUIButtonConfig {
+    UUIRect bounds;
+    UUIStyleId style;
+    const char *text;
+    UUIButtonPressedCallback on_pressed;
+    void *context;
+} UUIButtonConfig;
+
 struct UUIButton {
     UUIElement element;
     const char *text;
@@ -22,13 +30,9 @@ struct UUIButton {
  * @brief Initializes the UI button to a valid empty runtime state.
  *
  * @param button Button widget to initialize, rename or activate.
- * @param bounds Bounds used for layout, culling, collision, or effect calculations.
- * @param style UI style identifier resolved by the active theme.
- * @param text Text content consumed by formatting or rendering.
- * @param on_pressed Callback invoked when the button is activated.
- * @param context Opaque caller context passed back to callbacks.
+ * @param config Caller-owned initialization values consumed during the call.
  */
-void unsigned_ui_button_init(UUIButton *button, UUIRect bounds, UUIStyleId style, const char *text, UUIButtonPressedCallback on_pressed, void *context);
+void unsigned_ui_button_init(UUIButton *button, const UUIButtonConfig *config);
 
 /**
  * @brief Processes the UI button.

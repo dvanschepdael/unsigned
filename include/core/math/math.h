@@ -84,6 +84,16 @@ static inline u16 unsigned_math_random_u16(u16 *state) {
 }
 
 /**
+ * @brief Advance the deterministic RNG and map it to [0, upper_bound) without division.
+ *
+ * Multiply-high keeps the mapping bounded and avoids a 68000 integer modulo/divide instruction.
+ * @pre `state` is valid and `upper_bound > 0`.
+ */
+static inline u16 unsigned_math_random_bounded_u16(u16 *state, u16 upper_bound) {
+    return (u16)(((u32)unsigned_math_random_u16(state) * upper_bound) >> 16u);
+}
+
+/**
  * @brief Divides a signed 32-bit value by 2^shift with C99 truncation toward zero.
  *
  * This avoids target integer-division instructions on fixed-point hot paths while preserving

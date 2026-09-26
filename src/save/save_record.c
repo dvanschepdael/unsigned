@@ -45,9 +45,7 @@ bool unsigned_save_record_has_magic(const u8 *record) {
 void unsigned_save_record_build(u8 record[UNSIGNED_SAVE_RECORD_SIZE], const void *data, u16 size, u16 data_version) {
     const u8 *src = data;
 
-    for (u16 i = 0u; i < UNSIGNED_SAVE_RECORD_SIZE; ++i) {
-        record[i] = 0u;
-    }
+    unsigned_save_clear_bytes(record, UNSIGNED_SAVE_RECORD_SIZE);
 
     record[0] = (u8)UNSIGNED_SAVE_MAGIC_0;
     record[1] = (u8)UNSIGNED_SAVE_MAGIC_1;

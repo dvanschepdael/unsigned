@@ -127,8 +127,7 @@ static void actor_collision_refresh(UActor *actor) {
      * On the overwhelmingly common idle frame, preserve the registration metadata too instead
      * of clearing and rebuilding it. Channel comparisons keep this safe even if two animations
      * intentionally share a UFrame object but use different collision channels. */
-    if (transform_current && hitbox_active == hitbox_expected && hurtbox_active == hurtbox_expected && (!hitbox_expected || actor->collision.hitbox_channel == animation->hitbox_channel) &&
-        (!hurtbox_expected || actor->collision.hurtbox_channel == animation->hurtbox_channel)) {
+    if (transform_current && hitbox_active == hitbox_expected && hurtbox_active == hurtbox_expected && (!hitbox_expected || actor->collision.hitbox_channel == animation->hitbox_channel) && (!hurtbox_expected || actor->collision.hurtbox_channel == animation->hurtbox_channel)) {
         return;
     }
 

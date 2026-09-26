@@ -8,6 +8,30 @@
 #include "level/level.h"
 #include "level/level_runtime.h"
 
+/** Initialize the common level-manager runtime shared by graph and direct modes. */
+static void level_manager_init_runtime(ULevelManager *manager, ULevel *level, void *level_context, ULevelManagerMode mode) {
+    *manager = (ULevelManager){
+        .level = level,
+        .level_context = level_context,
+        .mode = mode,
+        .status = U_LEVEL_MANAGER_STOPPED,
+    };
+}
+
+/** Load one definition and publish the manager state associated with that transition. */
+static void level_manager_activate(ULevelManager *manager, const ULevelDefinition *definition, const ULevelBinding *binding) {
+    unsigned_level_load(manager->level, definition, manager->level_context);
+    manager->active_binding = binding;
+    manager->status = U_LEVEL_MANAGER_ACTIVE;
+}
+
+/** Unload the current definition and publish the shared stopped state. */
+static void level_manager_deactivate(ULevelManager *manager) {
+    unsigned_level_unload(manager->level);
+    manager->active_binding = NULL;
+    manager->status = U_LEVEL_MANAGER_STOPPED;
+}
+
 /**
  * @brief Resolves the authored level binding for a state reached by the graph.
  * @pre `node` has exactly one binding in `manager->graph`.
@@ -24,9 +48,7 @@ static const ULevelBinding *level_manager_binding(const ULevelManager *manager, 
 /** Synchronizes the loaded level with the level-manager state graph after transitions. */
 static void level_manager_sync(ULevelManager *manager) {
     if (manager->state_graph.current == NULL) {
-        unsigned_level_unload(manager->level);
-        manager->active_binding = NULL;
-        manager->status = U_LEVEL_MANAGER_STOPPED;
+        level_manager_deactivate(manager);
         return;
     }
 
@@ -37,19 +59,12 @@ static void level_manager_sync(ULevelManager *manager) {
     }
 
     const ULevelBinding *binding = level_manager_binding(manager, manager->state_graph.current);
-    unsigned_level_load(manager->level, binding->definition, manager->level_context);
-    manager->active_binding = binding;
-    manager->status = U_LEVEL_MANAGER_ACTIVE;
+    level_manager_activate(manager, binding->definition, binding);
 }
 
 void unsigned_level_manager_init(ULevelManager *manager, ULevel *level, const ULevelGraph *graph, void *condition_context, void *level_context) {
-    *manager = (ULevelManager){
-        .level = level,
-        .graph = graph,
-        .level_context = level_context,
-        .mode = U_LEVEL_MANAGER_MODE_GRAPH,
-        .status = U_LEVEL_MANAGER_STOPPED,
-    };
+    level_manager_init_runtime(manager, level, level_context, U_LEVEL_MANAGER_MODE_GRAPH);
+    manager->graph = graph;
     unsigned_state_graph_init(&manager->state_graph, graph->global, graph->initial, condition_context);
     unsigned_state_graph_clock_reset(&manager->state_graph_clock, &manager->state_graph);
 
@@ -62,13 +77,7 @@ void unsigned_level_manager_init(ULevelManager *manager, ULevel *level, const UL
 }
 
 void unsigned_level_manager_init_direct(ULevelManager *manager, ULevel *level, const ULevelDefinition *initial, void *level_context) {
-    *manager = (ULevelManager){
-        .level = level,
-        .level_context = level_context,
-        .mode = U_LEVEL_MANAGER_MODE_DIRECT,
-        .status = U_LEVEL_MANAGER_STOPPED,
-    };
-
+    level_manager_init_runtime(manager, level, level_context, U_LEVEL_MANAGER_MODE_DIRECT);
     unsigned_level_manager_set(manager, initial);
 }
 
@@ -77,9 +86,7 @@ void unsigned_level_manager_set(ULevelManager *manager, const ULevelDefinition *
         return;
     }
 
-    unsigned_level_load(manager->level, definition, manager->level_context);
-    manager->active_binding = NULL;
-    manager->status = U_LEVEL_MANAGER_ACTIVE;
+    level_manager_activate(manager, definition, NULL);
 }
 
 void unsigned_level_manager_send_event(ULevelManager *manager, UEvent event) {
@@ -117,9 +124,8 @@ void unsigned_level_manager_stop(ULevelManager *manager) {
         unsigned_state_graph_stop(&manager->state_graph);
         level_manager_sync(manager);
     } else {
-        unsigned_level_unload(manager->level);
+        level_manager_deactivate(manager);
     }
-    manager->status = U_LEVEL_MANAGER_STOPPED;
 }
 
 const ULevelDefinition *unsigned_level_manager_current(const ULevelManager *manager) {

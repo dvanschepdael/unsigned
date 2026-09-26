@@ -33,10 +33,7 @@ static void gameplay_effect_execute_instant(const UGameplayEffect *effect, UGame
 }
 
 void unsigned_gameplay_effect_pool_init(UEffectPool *effects) {
-    *effects = (UEffectPool){0};
-    effects->pool.capacity = UNSIGNED_GAMEPLAY_MAX_EFFECT;
-    effects->pool.instances = effects->instances;
-    unsigned_pool_init(&effects->pool);
+    unsigned_pool_init(&effects->pool, effects->instances, ARRAY_COUNT_U8(effects->instances));
 }
 
 void unsigned_gameplay_effect_pool_clear(UEffectPool *effects) {

@@ -48,9 +48,6 @@ void unsigned_level_renderer_prepare(ULevelRenderer *renderer, ULevel *level, co
  */
 void unsigned_level_renderer_commit(ULevelRenderer *renderer);
 
-/** Latest prepared frame's VRAM budget/relocation instrumentation. */
-const URenderFrameStats *unsigned_level_renderer_stats(const ULevelRenderer *renderer);
-
 /** Hide all currently owned background and actor hardware sprites. */
 void unsigned_level_renderer_hide(ULevelRenderer *renderer);
 

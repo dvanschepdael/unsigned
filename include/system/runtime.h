@@ -51,7 +51,7 @@ typedef struct UNeoGeoRuntimeDefinition {
     /** CPU-only render planning callback executed before waiting for VBlank. Must not write VRAM. */
     UCallbackFunc prepare_render;
     /** Post-VBlank hardware commit/presentation callback. */
-    UCallbackFunc render;
+    UCallbackFunc commit_render;
     UNeoGeoPhaseCallback enter_phase;
     UNeoGeoPhaseCallback render_phase;
 } UNeoGeoRuntimeDefinition;

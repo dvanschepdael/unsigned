@@ -40,8 +40,8 @@ static void npc_presentation_batch_to_current_frame(UNpc *npc, const UTLSS *tlss
 }
 
 void unsigned_npc_init(UNpc *npc) {
-    npc->tlss_ai = (UTLSSNode){.last_tick = UINT16_MAX};
-    npc->tlss_presentation = (UTLSSNode){.last_tick = UINT16_MAX};
+    npc->tlss_ai = (UTLSSNode){ .last_tick = UINT16_MAX };
+    npc->tlss_presentation = (UTLSSNode){ .last_tick = UINT16_MAX };
     npc->presentation_animation_last_tick = UINT16_MAX;
     npc->presentation_playback_revision = npc->character->actor.sprite.playback_revision;
 

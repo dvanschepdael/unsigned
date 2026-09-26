@@ -6,10 +6,7 @@
 #include "gameplay/cue_pool.h"
 
 void unsigned_gameplay_cue_pool_init(UCuePool *cues) {
-    *cues = (UCuePool){0};
-    cues->pool.capacity = UNSIGNED_GAMEPLAY_MAX_CUE;
-    cues->pool.instances = cues->instances;
-    unsigned_pool_init(&cues->pool);
+    unsigned_pool_init(&cues->pool, cues->instances, ARRAY_COUNT_U8(cues->instances));
 }
 
 void unsigned_gameplay_cue_pool_clear(UCuePool *cues) {

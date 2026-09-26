@@ -28,6 +28,11 @@ static u8 neo_geo_bcd_to_u8(u8 value) {
     return (u8)(tens * 10u + ones);
 }
 
+/** Encode one validated cabinet setting in the BIOS packed-BCD representation. */
+static u8 neo_geo_u8_to_bcd(u8 value) {
+    return (u8)(((value / 10u) << 4u) | (value % 10u));
+}
+
 bool unsigned_neo_geo_game_start_compulsion_enabled(void) {
     return unsigned_neo_geo_system() == U_NEO_GEO_SYSTEM_MVS && bram_settings_game_start_compulsion == 0u;
 }
@@ -50,7 +55,7 @@ void unsigned_neo_geo_set_game_start_compulsion_seconds(u8 seconds) {
     if (unsigned_neo_geo_system() != U_NEO_GEO_SYSTEM_MVS) {
         return;
     }
-    const u8 bcd = (u8)(((seconds / 10u) << 4) | (seconds % 10u));
+    const u8 bcd = neo_geo_u8_to_bcd(seconds);
     neo_geo_write_bios_bram_setting(&bram_settings_compulsion_secs_bcd, bcd);
 }
 

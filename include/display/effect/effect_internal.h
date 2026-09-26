@@ -21,6 +21,13 @@ static inline UEffectBounds unsigned_effect_saturate_bounds(u32 x, u32 y) {
     };
 }
 
+static inline UEffectBounds unsigned_effect_translation_bounds(s16 offset_x, s16 offset_y) {
+    return (UEffectBounds){
+        .offset_x = unsigned_effect_abs_s16(offset_x),
+        .offset_y = unsigned_effect_abs_s16(offset_y),
+    };
+}
+
 static inline UEffectBounds unsigned_effect_zero_bounds(u8 column_count, const void *context) {
     (void)column_count;
     (void)context;

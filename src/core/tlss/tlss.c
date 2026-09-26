@@ -10,20 +10,15 @@ static u8 unsigned_tlss_get_mask(UTLSSScale scale) {
     return (u8)((1U << (u8)scale) - 1U);
 }
 
-/** Returns the number of frames represented by one scheduling period for the selected scale. */
-static u16 unsigned_tlss_get_period(UTLSSScale scale) {
-    return (u16)(1U << (u16)scale);
-}
-
 /** Distributes peer phases across a cadence so deferred work is not clustered on one frame. */
-static u8 unsigned_tlss_distribute_phase(u16 index, u16 count, UTLSSScale scale) {
+static u8 unsigned_tlss_distribute_phase(u16 index, u16 count, u8 mask) {
     if (count == 1U) {
         return 0U;
     }
 
-    const u16 period = unsigned_tlss_get_period(scale);
-    const u32 value = (((u32)index * (u32)period) + (u32)count - 1U) / (u32)count;
-    return (u8)(value & (u32)(period - 1U));
+    const u16 period = (u16)mask + 1u;
+    const u32 value = (((u32)index * period) + (u32)count - 1U) / (u32)count;
+    return (u8)(value & mask);
 }
 
 void unsigned_tlss_init(UTLSS *tlss) {
@@ -40,7 +35,7 @@ void unsigned_tlss_begin_frame(UTLSS *tlss) {
 
 void unsigned_tlss_node_init(const UTLSS *tlss, UTLSSNode *node, u16 index, u16 count, UTLSSScale scale) {
     node->mask = unsigned_tlss_get_mask(scale);
-    node->phase = unsigned_tlss_distribute_phase(index, count, scale);
+    node->phase = unsigned_tlss_distribute_phase(index, count, node->mask);
     node->last_tick = tlss->frame;
 }
 

@@ -9,7 +9,7 @@
 #include "actor/projectile_pool.h"
 #include "level/level_internal.h"
 
-void level_actor_release_pools(ULevel *level) {
+void level_actor_clear(ULevel *level) {
     UPoolInstanceContainer *players = &level->actor_pools->players;
     UPoolInstanceContainer *npcs = &level->actor_pools->npcs;
     UPoolInstanceContainer *objects = &level->actor_pools->objects;
@@ -42,6 +42,10 @@ void level_actor_release_pools(ULevel *level) {
             unsigned_projectile_pool_release(projectiles, instance);
         }
     }
+
+    level->actors.count = 0u;
+    level->actors.layout_revision = 0u;
+    level->actor_sync = (ULevelActorSyncRuntime){0};
 }
 
 void level_actor_sync_pools(ULevel *level) {

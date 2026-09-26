@@ -3,7 +3,6 @@
  * @brief Orchestrates collision registration and hit/projectile resolution for a level.
  */
 
-#include "level/level_collision.h"
 
 #include "actor/npc.h"
 #include "actor/object.h"
@@ -18,14 +17,11 @@ typedef struct ULevelDynamicCollisionState {
     bool has_boxes;
 } ULevelDynamicCollisionState;
 
-/** Probe one actor for an attack source without transforming its hurtbox/hitbox. */
-static void level_collision_probe_actor(UActor *actor, ULevelDynamicCollisionState *state) {
-    state->has_hitboxes = state->has_hitboxes || unsigned_actor_collision_probe(actor);
-}
-
-/** Lightweight attack-source scan used by the idle-frame fast path. */
-static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) {
-    ULevelDynamicCollisionState state = {0};
+/** Lightweight attack-source scan used by the idle-frame fast path.
+ * Once one hitbox is found, the caller will materialize every dynamic actor immediately, so
+ * continuing the probe would only duplicate that traversal.
+ */
+static bool level_collision_probe_dynamic(ULevel *level) {
     const bool active_npcs_only = level->definition->cull_offscreen_npc_collision;
     UPoolInstanceContainer *players = &level->actor_pools->players;
     UPoolInstanceContainer *npcs = &level->actor_pools->npcs;
@@ -37,7 +33,9 @@ static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) 
             continue;
         }
         UPlayer *player = instance->args;
-        level_collision_probe_actor(&player->character->actor, &state);
+        if (unsigned_actor_collision_probe(&player->character->actor)) {
+            return true;
+        }
     }
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(npcs); ++i) {
@@ -50,7 +48,9 @@ static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) 
             unsigned_actor_collision_deactivate_frame(&npc->character->actor);
             continue;
         }
-        level_collision_probe_actor(&npc->character->actor, &state);
+        if (unsigned_actor_collision_probe(&npc->character->actor)) {
+            return true;
+        }
     }
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(objects); ++i) {
@@ -59,11 +59,11 @@ static ULevelDynamicCollisionState level_collision_probe_dynamic(ULevel *level) 
             continue;
         }
         UObject *object = instance->args;
-        if (!object->static_collision) {
-            level_collision_probe_actor(&object->actor, &state);
+        if (!object->static_collision && unsigned_actor_collision_probe(&object->actor)) {
+            return true;
         }
     }
-    return state;
+    return false;
 }
 
 /**
@@ -160,6 +160,14 @@ static void level_collision_register_static_objects(UPoolInstanceContainer *pool
     }
 }
 
+void level_collision_clear(ULevel *level) {
+    unsigned_physics_collision_clear(&level->collision.manager);
+    level->collision.actor_index = (UCollisionActorIndex){0};
+    level->collision.hits = (UCollisionHitContainer){0};
+    level->collision.static_has_hitboxes = false;
+    level->collision.dynamic_registration_populated = false;
+}
+
 /**
  * Build persistent object collision after a level is loaded.
  * Static boxes remain in UCollisionManager while per-frame dynamic layers are cleared/rebuilt.
@@ -185,17 +193,16 @@ void level_collision_detect(ULevel *level) {
      * overhead. On non-projectile frames, keep the lightweight probe to preserve the idle fast
      * path without transforming or registering every hurtbox. */
     if (!has_projectiles) {
-        dynamic = level_collision_probe_dynamic(level);
+        const bool has_dynamic_hitboxes = level_collision_probe_dynamic(level);
 
-        if (!dynamic.has_hitboxes && !has_persistent_hitboxes) {
+        if (!has_dynamic_hitboxes && !has_persistent_hitboxes) {
             /* No gameplay source can query dynamic boxes this frame. Probe only maintains the
              * attack-edge cache; a previous query frame is cleared once when returning to idle. */
             if (collision->dynamic_registration_populated) {
                 unsigned_physics_collision_clear_dynamic(&collision->manager);
                 collision->dynamic_registration_populated = false;
             }
-            collision->actor_index = (UCollisionActorIndex){0};
-            collision->hits = (UCollisionHitContainer){0};
+            collision->hits.count = 0u;
             return;
         }
     }
@@ -217,6 +224,6 @@ void level_collision_detect(ULevel *level) {
     if (has_hitboxes) {
         unsigned_collision_hit_detect(&collision->hits, &collision->manager, &collision->actor_index, &level->tlss);
     } else {
-        collision->hits = (UCollisionHitContainer){0};
+        collision->hits.count = 0u;
     }
 }

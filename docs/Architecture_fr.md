@@ -184,8 +184,8 @@ demo_loop_tick
 demo_loop_prepare_render
   -> unsigned_game_instance_prepare_render
 
-demo_loop_render
-  -> unsigned_game_instance_render (commit)
+demo_loop_commit_render
+  -> unsigned_game_instance_commit_render (commit)
   -> overlays de stage/scène
   -> menu
   -> HUD
@@ -201,7 +201,7 @@ demo_loop_render
 4. tick du viewport ;
 5. tick de l'audio.
 
-Le rendu du niveau est séparé entre `unsigned_game_instance_prepare_render()` pendant l'affichage actif et le commit effectué par `unsigned_game_instance_render()` juste après le VBlank. L'appel de préparation est une précondition de frame pour le commit ; `unsigned_game_instance_render()` ne recalcule pas un plan manquant.
+Le rendu du niveau est séparé entre `unsigned_game_instance_prepare_render()` pendant l'affichage actif et le commit effectué par `unsigned_game_instance_commit_render()` juste après le VBlank. L'appel de préparation est une précondition de frame pour le commit ; `unsigned_game_instance_commit_render()` ne recalcule pas un plan manquant.
 
 ## 5. Cycle de vie d'un niveau
 
@@ -515,7 +515,6 @@ AFFICHAGE ACTIF
         -> culling/layout/détection des relocations acteurs
         -> préparation transforms/effets des sprites
         -> planification uploads/transforms background
-        -> estimation des words VRAM / compteurs de relocation
 
 VBLANK
     unsigned_renderer_backend_begin()
@@ -525,8 +524,6 @@ VBLANK
         DEFERRED -> réservé aux travaux futurs réellement différables
     unsigned_renderer_backend_end()
 ```
-
-`URenderFrameStats` expose l'estimation des words VRAM par priorité, le nombre de relocations acteurs, le nombre de colonnes sprites acteurs et les uploads de colonnes background. La dernière frame préparée se consulte avec `unsigned_level_renderer_stats()` sur le `ULevelRenderer` propriétaire (pour une game instance : `&game->renderer`).
 
 ## 13. UI et HUD
 

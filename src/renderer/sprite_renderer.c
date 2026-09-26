@@ -425,63 +425,6 @@ void unsigned_sprite_renderer_commit_batched_driver_axis(USprite *sprite, u8 dir
     }
 }
 
-void unsigned_sprite_renderer_estimate_prepared_vram_words(const USprite *sprite, u32 *critical_words, u32 *high_words) {
-    u32 critical = 0u;
-    u32 high = 0u;
-
-    if (sprite->render.prepared.valid) {
-        const USpriteRenderState *render = &sprite->render;
-        const u8 width = render->layout.sprite_count;
-        const u8 height = sprite->definition->height_tiles;
-        const u8 dirty = render->dirty;
-
-        if ((dirty & U_SPRITE_RENDER_DIRTY_CHAIN_BOUNDARY) != 0u) {
-            ++critical;
-        }
-
-        if (render->prepared.hidden) {
-            if (render->committed.visible) {
-                high += (dirty & U_SPRITE_RENDER_DIRTY_LAYOUT) != 0u ? width : 1u;
-            } else if (!render->committed.initialized) {
-                high += width;
-            }
-        } else {
-            if ((dirty & U_SPRITE_RENDER_DIRTY_GRAPHICS) == U_SPRITE_RENDER_DIRTY_GRAPHICS) {
-                high += (u32)width * height * 2u;
-            } else {
-                if ((dirty & U_SPRITE_RENDER_DIRTY_TILES) != 0u) {
-                    high += (u32)width * height;
-                }
-                if ((dirty & U_SPRITE_RENDER_DIRTY_ATTRIBUTES) != 0u) {
-                    high += (u32)width * height;
-                }
-            }
-
-            if ((dirty & U_SPRITE_RENDER_DIRTY_PADDING) != 0u && sprite->definition->clear_unused_rows && height < UNSIGNED_SPRITE_MAX_HEIGHT_TILES) {
-                high += (u32)width * (UNSIGNED_SPRITE_MAX_HEIGHT_TILES - height) * 2u;
-            }
-
-            if (render->prepared.per_column) {
-                high += (u32)width * 3u;
-            } else {
-                if ((dirty & U_SPRITE_RENDER_DIRTY_SCALE) != 0u) {
-                    high += width;
-                }
-                if ((dirty & U_SPRITE_RENDER_DIRTY_LAYOUT) != 0u) {
-                    high += (u32)width + 1u;
-                } else if ((dirty & U_SPRITE_RENDER_DIRTY_POSITION) == U_SPRITE_RENDER_DIRTY_POSITION) {
-                    high += 2u;
-                } else if ((dirty & U_SPRITE_RENDER_DIRTY_POSITION) != 0u) {
-                    high += 1u;
-                }
-            }
-        }
-    }
-
-    *critical_words += critical;
-    *high_words += high;
-}
-
 void unsigned_sprite_renderer_clear_range(u16 first_sprite, u16 sprite_count) {
     unsigned_sprite_backend_clear_range(first_sprite, sprite_count);
 }

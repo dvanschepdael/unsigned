@@ -121,8 +121,8 @@ engine/system/runtime.c
         +--> ng_wait_vblank()
         +--> audio transport
         |
-        +--> demo_loop_render()
-               +--> unsigned_game_instance_render()
+        +--> demo_loop_commit_render()
+               +--> unsigned_game_instance_commit_render()
                +--> overlays / menu / HUD
 ```
 

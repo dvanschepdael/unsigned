@@ -6,10 +6,7 @@ static UEffectBounds transform_bounds(u8 column_count, const void *context) {
     const UTransformEffect *transform = context;
     (void)column_count;
 
-    return (UEffectBounds){
-        .offset_x = unsigned_effect_abs_s16(transform->offset_x),
-        .offset_y = unsigned_effect_abs_s16(transform->offset_y),
-    };
+    return unsigned_effect_translation_bounds(transform->offset_x, transform->offset_y);
 }
 
 static void transform_sample(UEffectSample *sample, u8 column, u8 column_count, u8 phase, const void *context) {

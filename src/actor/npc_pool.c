@@ -6,10 +6,9 @@
 #include "actor/npc_pool.h"
 
 UNpcPoolInstance *unsigned_npc_pool_reserve(UPoolInstanceContainer *pool, UNpc *npc) {
-    UNpcPoolInstance *instance = unsigned_pool_reserve(pool);
+    UNpcPoolInstance *instance = unsigned_pool_reserve_args(pool, npc);
 
     unsigned_npc_init(npc);
-    instance->args = npc;
     return instance;
 }
 

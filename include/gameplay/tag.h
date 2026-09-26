@@ -22,8 +22,9 @@ typedef struct UGameplayTagReference {
  * @brief Compact reference-counted set of gameplay tags.
  *
  * Entries are canonicalized by the mutation API: one entry per tag, no zero references inside the
- * active prefix, and dense storage in `[0, count)`. This invariant lets gameplay queries stay small
- * and branch-light on the 68000.
+ * active prefix, and dense storage in `[0, count)`. Entries outside the active prefix are unspecified
+ * and are overwritten when reused. This invariant lets gameplay queries and clears stay small and
+ * branch-light on the 68000.
  *
  * @invariant `count <= UNSIGNED_GAMEPLAY_MAX_TAG`.
  * @invariant Active entries have non-zero tag ids/counts and unique tag ids.
@@ -34,7 +35,7 @@ typedef struct UGameplayTagContainer {
 } UGameplayTagContainer;
 
 /**
- * @brief Clears every gameplay tag and reference count from a fixed-capacity container.
+ * @brief Clears the active gameplay tag set by invalidating its compact prefix.
  *
  * @param container Tag container to reset.
  * @pre `container` is valid.

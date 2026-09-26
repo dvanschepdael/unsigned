@@ -5,6 +5,8 @@
 
 #include "display/ui/menu.h"
 
+#include "display/ui/collection_internal.h"
+
 #include "display/ui/widget/button.h"
 #include "display/ui/widget/selector.h"
 
@@ -72,8 +74,7 @@ void unsigned_ui_menu_init(UUIMenu *menu) {
 }
 
 void unsigned_ui_menu_add(UUIMenu *menu, UUIElement *element) {
-    menu->items[menu->count] = element;
-    ++menu->count;
+    unsigned_ui_collection_add(menu->items, &menu->count, element);
 
     if (menu->focused_index == UINT8_MAX && unsigned_ui_element_can_focus(element)) {
         unsigned_ui_menu_set_focus(menu, (u8)(menu->count - 1));
@@ -81,18 +82,9 @@ void unsigned_ui_menu_add(UUIMenu *menu, UUIElement *element) {
 }
 
 void unsigned_ui_menu_remove(UUIMenu *menu, UUIElement *element) {
-    u8 index = 0u;
-    while (menu->items[index] != element) {
-        ++index;
-    }
-
     unsigned_ui_menu_clear_focus(menu);
     element->focused = false;
-    for (u8 i = index; i + 1u < menu->count; ++i) {
-        menu->items[i] = menu->items[i + 1u];
-    }
-
-    --menu->count;
+    menu->count = unsigned_ui_collection_remove(menu->items, menu->count, element);
     unsigned_ui_menu_repair_focus(menu);
 }
 

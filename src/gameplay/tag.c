@@ -21,11 +21,6 @@ static u8 gameplay_tag_find_index(const UGameplayTagContainer *container, UGamep
     return GAMEPLAY_TAG_INDEX_NONE;
 }
 
-static void gameplay_tag_reference_clear(UGameplayTagReference *reference) {
-    reference->count = 0u;
-    reference->tag = UNSIGNED_GAMEPLAY_TAG_NONE;
-}
-
 /** Adds a known-valid reference count to the compact tag set. */
 static void gameplay_tag_add_count(UGameplayTagContainer *container, UGameplayTag tag, u8 count) {
     const u8 index = gameplay_tag_find_index(container, tag);
@@ -54,13 +49,10 @@ static void gameplay_tag_remove_count(UGameplayTagContainer *container, UGamepla
         container->instances[i] = container->instances[i + 1u];
     }
 
-    gameplay_tag_reference_clear(&container->instances[--container->count]);
+    --container->count;
 }
 
 void unsigned_gameplay_tag_clear(UGameplayTagContainer *container) {
-    for (u8 i = 0u; i < container->count; ++i) {
-        gameplay_tag_reference_clear(&container->instances[i]);
-    }
     container->count = 0u;
 }
 

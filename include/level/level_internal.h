@@ -11,11 +11,11 @@
 #include "level/level_runtime.h"
 
 /**
- * @brief Releases all active player, NPC, object and projectile instances owned by the loaded level.
+ * @brief Releases all active typed actors and resets the derived level-wide actor view.
  *
- * @param level Loaded level whose typed actor pools are cleared.
+ * @param level Loaded level whose actor runtime is cleared.
  */
-void level_actor_release_pools(ULevel *level);
+void level_actor_clear(ULevel *level);
 
 /**
  * @brief Rebuilds the level-wide active actor view from the four typed fixed-capacity pools.
@@ -71,6 +71,9 @@ void level_spawn_load(ULevel *level, const ULevelDefinition *definition, void *c
  * @pre Static collision storage covers the authored objects that publish persistent boxes.
  */
 void level_collision_build_static(ULevel *level);
+
+/** Reset persistent/dynamic collision state owned by the loaded level. */
+void level_collision_clear(ULevel *level);
 
 /**
  * @brief Runs one complete level collision phase: dynamic registration, actor indexing, projectile resolution and attack-hit detection.

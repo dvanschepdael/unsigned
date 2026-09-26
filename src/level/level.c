@@ -14,15 +14,8 @@
 /** Clear all mutable state owned by the currently loaded level content. */
 static void level_clear_loaded_content(ULevel *level) {
     unsigned_gameplay_runtime_clear(level->gameplay);
-    level_actor_release_pools(level);
-    level->actors.count = 0u;
-    level->actors.layout_revision = 0u;
-    level->actor_sync = (ULevelActorSyncRuntime){0};
-    unsigned_physics_collision_clear(&level->collision.manager);
-    level->collision.actor_index = (UCollisionActorIndex){0};
-    level->collision.hits = (UCollisionHitContainer){0};
-    level->collision.static_has_hitboxes = false;
-    level->collision.dynamic_registration_populated = false;
+    level_actor_clear(level);
+    level_collision_clear(level);
     level->definition = NULL;
     level->context = NULL;
 }

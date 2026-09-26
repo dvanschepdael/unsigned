@@ -184,8 +184,8 @@ demo_loop_tick
 demo_loop_prepare_render
   -> unsigned_game_instance_prepare_render
 
-demo_loop_render
-  -> unsigned_game_instance_render (commit)
+demo_loop_commit_render
+  -> unsigned_game_instance_commit_render (commit)
   -> stage/scene overlays
   -> menu
   -> HUD
@@ -201,7 +201,7 @@ demo_loop_render
 4. ticks the viewport;
 5. ticks audio.
 
-Level rendering is split between `unsigned_game_instance_prepare_render()` during active display and the commit performed by `unsigned_game_instance_render()` immediately after VBlank. The prepare call is a frame precondition for the commit; `unsigned_game_instance_render()` does not recompute a missing plan.
+Level rendering is split between `unsigned_game_instance_prepare_render()` during active display and the commit performed by `unsigned_game_instance_commit_render()` immediately after VBlank. The prepare call is a frame precondition for the commit; `unsigned_game_instance_commit_render()` does not recompute a missing plan.
 
 ## 5. Level lifecycle
 
@@ -515,7 +515,6 @@ ACTIVE DISPLAY
         -> actor culling/layout/relocation detection
         -> sprite transform/effect preparation
         -> background upload/transform planning
-        -> VRAM word estimate / relocation counters
 
 VBLANK
     unsigned_renderer_backend_begin()
@@ -525,8 +524,6 @@ VBLANK
         DEFERRED -> reserved for future safely postponable work
     unsigned_renderer_backend_end()
 ```
-
-`URenderFrameStats` exposes the estimated VRAM words per priority, actor relocation count, actor sprite-column count and background column uploads. The latest prepared frame is queried with `unsigned_level_renderer_stats()` on the owning `ULevelRenderer` (for a game instance, `&game->renderer`).
 
 ## 13. UI and HUD
 

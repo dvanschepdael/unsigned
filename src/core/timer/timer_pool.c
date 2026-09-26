@@ -9,9 +9,7 @@ void unsigned_timer_pool_init(UTimerPool *timers, u8 frames_per_second) {
     *timers = (UTimerPool){
         .frames_per_second = frames_per_second,
     };
-    timers->pool.capacity = UNSIGNED_GAME_MAX_TIMER;
-    timers->pool.instances = timers->instances;
-    unsigned_pool_init(&timers->pool);
+    unsigned_pool_init(&timers->pool, timers->instances, ARRAY_COUNT_U8(timers->instances));
 }
 
 void unsigned_timer_pool_clear(UTimerPool *timers) {
@@ -23,10 +21,9 @@ void unsigned_timer_pool_clear(UTimerPool *timers) {
 }
 
 UTimerPoolInstance *unsigned_timer_pool_reserve(UTimerPool *timers, const UTimer *timer, void *args) {
-    UTimerPoolInstance *instance = unsigned_pool_reserve(&timers->pool);
+    UTimerPoolInstance *instance = unsigned_pool_reserve_args(&timers->pool, args);
 
     instance->object = timer;
-    instance->args = args;
     instance->elapsed = 0u;
     instance->duration = timer->duration_frames;
     return instance;

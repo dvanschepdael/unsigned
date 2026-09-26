@@ -15,6 +15,13 @@ static inline void unsigned_save_copy_bytes(u8 *dst, const u8 *src, u32 size) {
     }
 }
 
+/** Clear a bounded save buffer without introducing a libc dependency. */
+static inline void unsigned_save_clear_bytes(u8 *dst, u32 size) {
+    while (size-- != 0u) {
+        *dst++ = 0u;
+    }
+}
+
 /** Encode one 16-bit save field in stable big-endian byte order. */
 static inline void unsigned_save_write_u16_be(u8 *dst, u16 value) {
     dst[0] = (u8)(value >> 8u);

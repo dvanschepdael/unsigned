@@ -24,11 +24,10 @@ void unsigned_actor_renderer_prepare(UActorContainer *actors, const UViewport *v
 
 /**
  * Allocate the prepared actor batch from `first_sprite`.
- * @return Number of sprite ranges relocated by this layout pass.
  * @pre `actors` was prepared with the same `reserve_hidden` policy.
  * @pre The complete batch fits the Neo Geo hardware-sprite range reserved for actors.
  */
-u16 unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_sprite, bool reserve_hidden);
+void unsigned_actor_renderer_layout_prepared(UActorContainer *actors, u16 first_sprite, bool reserve_hidden);
 
 /** CPU-only transform/effect preparation for every sprite in the prepared actor batch. */
 void unsigned_actor_renderer_prepare_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer);

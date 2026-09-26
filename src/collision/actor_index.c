@@ -27,7 +27,7 @@ static void actor_index_expand_y(s32 *min_top_offset, s32 *max_bottom_offset, co
 }
 
 void unsigned_collision_actor_index_build(UCollisionActorIndex *index, const UActorContainer *actors, const UCollisionManager *collisions) {
-    u16 actor_box_count[U_COLLISION_CHANNEL_COUNT] = {0u};
+    u8 actor_box_count[U_COLLISION_CHANNEL_COUNT] = {0u};
     bool has_hitbox_bounds = false;
     bool has_hurtbox_bounds = false;
 
@@ -42,7 +42,7 @@ void unsigned_collision_actor_index_build(UCollisionActorIndex *index, const UAc
         const UPhysicsCollisionChannel hitbox_channel = actor->collision.hitbox_channel;
         const UPhysicsCollisionChannel hurtbox_channel = actor->collision.hurtbox_channel;
 
-        if (actor->collision.hitbox_channel != U_COLLISION_CHANNEL_NONE) {
+        if (hitbox_channel != U_COLLISION_CHANNEL_NONE) {
             const UPhysicsCollisionMask mask = (UPhysicsCollisionMask)(1u << hitbox_channel);
             index->hitbox_channels |= mask;
             if (i < index->hitbox_first) {
@@ -54,7 +54,7 @@ void unsigned_collision_actor_index_build(UCollisionActorIndex *index, const UAc
             has_hitbox_bounds = true;
         }
 
-        if (actor->collision.hurtbox_channel != U_COLLISION_CHANNEL_NONE) {
+        if (hurtbox_channel != U_COLLISION_CHANNEL_NONE) {
             const UPhysicsCollisionMask mask = (UPhysicsCollisionMask)(1u << hurtbox_channel);
             index->hurtbox_channels |= mask;
             actor_box_count[hurtbox_channel]++;
@@ -66,7 +66,7 @@ void unsigned_collision_actor_index_build(UCollisionActorIndex *index, const UAc
     for (UPhysicsCollisionChannel channel = 0u; channel < U_COLLISION_CHANNEL_COUNT; ++channel) {
         const u8 manager_count = collisions->layers[channel].boxes.count;
 
-        if (manager_count > 0u && actor_box_count[channel] == (u16)manager_count) {
+        if (manager_count > 0u && actor_box_count[channel] == manager_count) {
             index->covered_channels |= (UPhysicsCollisionMask)(1u << channel);
         }
     }

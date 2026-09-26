@@ -60,8 +60,11 @@ static inline u8 unsigned_pool_iteration_end(const UPoolInstanceContainer *pool)
  * @brief Initializes the pool to a valid empty runtime state.
  *
  * @param pool Fixed-capacity pool that owns the runtime slot.
+ * @param instances Caller-owned backing storage for exactly `capacity` slots.
+ * @param capacity Number of reusable slots in `instances`.
+ * @pre `pool` is valid; `instances` is valid when `capacity > 0`.
  */
-void unsigned_pool_init(UPoolInstanceContainer *pool);
+void unsigned_pool_init(UPoolInstanceContainer *pool, UPoolInstance *instances, u8 capacity);
 
 /**
  * @brief Reserves an inactive slot from the pool and binds it to the supplied runtime data.
@@ -71,6 +74,20 @@ void unsigned_pool_init(UPoolInstanceContainer *pool);
  * @pre `pool` is initialized, owns `capacity` backing slots and `pool->count < pool->capacity`.
  */
 UPoolInstance *unsigned_pool_reserve(UPoolInstanceContainer *pool);
+
+/**
+ * @brief Reserves a slot and binds its opaque runtime context.
+ *
+ * @param pool Pool that owns the new slot.
+ * @param args Opaque subsystem context stored on the active slot.
+ * @return Newly activated slot with `args` already bound.
+ * @pre `pool` satisfies the same reservation contract as unsigned_pool_reserve().
+ */
+static inline UPoolInstance *unsigned_pool_reserve_args(UPoolInstanceContainer *pool, void *args) {
+    UPoolInstance *instance = unsigned_pool_reserve(pool);
+    instance->args = args;
+    return instance;
+}
 
 /**
  * @brief Releases an active slot so it can be reused by a later reservation.

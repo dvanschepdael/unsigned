@@ -27,6 +27,7 @@
 #include <audio/audio_event.h>
 #include <audio/audio_music.h>
 #include <audio/audio_music_internal.h>
+#include <audio/audio_queue_internal.h>
 #include <audio/audio_resolver_internal.h>
 #include <audio/audio_types.h>
 #include <audio/config.h>
@@ -65,6 +66,7 @@
 #include <display/sprite/sprite.h>
 #include <display/text/text.h>
 #include <display/ui/blink.h>
+#include <display/ui/collection_internal.h>
 #include <display/ui/config.h>
 #include <display/ui/context.h>
 #include <display/ui/element.h>
@@ -105,7 +107,6 @@
 #include <level/background/config.h>
 #include <level/level.h>
 #include <level/level_camera.h>
-#include <level/level_collision.h>
 #include <level/level_definition.h>
 #include <level/level_internal.h>
 #include <level/level_manager.h>
@@ -142,6 +143,7 @@
 #include <system/credits.h>
 #include <system/credits_internal.h>
 #include <system/fix.h>
+#include <system/frame.h>
 #include <system/input.h>
 #include <system/m68k_hotpath.h>
 #include <system/palette_backend.h>

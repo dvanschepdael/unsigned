@@ -1,6 +1,16 @@
 #include "audio/audio.h"
 #include "audio/audio_resolver_internal.h"
 
+#define AUDIO_SELECTION_INDEX_NONE ((u8)0xffu)
+
+/** Reset one event selection state and install the route key selected by the caller. */
+static void audio_selection_reset(UAudioSelectionState *selection, s16 active_key) {
+    *selection = (UAudioSelectionState){
+        .active_key = active_key,
+        .previous_index = AUDIO_SELECTION_INDEX_NONE,
+    };
+}
+
 static bool unsigned_audio_event_conditions_pass(const UAudioManager *audio, const UAudioEventDefinition *definition) {
     if (definition->condition_count == 0u) {
         return true;
@@ -29,8 +39,8 @@ static const UAudioVariantSet *unsigned_audio_event_set(const UAudioManager *aud
 void unsigned_audio_manager_set_events(UAudioManager *audio, const UAudioEventDefinition *events) {
     audio->events = events;
     for (u8 i = 0u; i < UNSIGNED_AUDIO_MAX_EVENTS; ++i) {
-        audio->event_states[i] = (UAudioEventState){0};
-        audio->event_states[i].selection.previous_index = 0xffu;
+        audio->event_states[i] = (UAudioEventState){ 0 };
+        audio_selection_reset(&audio->event_states[i].selection, 0);
     }
 }
 
@@ -44,7 +54,8 @@ bool unsigned_audio_trigger(UAudioManager *audio, UAudioEventId event) {
         return false;
     }
 
-    if (definition->behavior->cooldown_ticks != 0u && audio->event_states[event].selection.previous_index != 0xffu && (audio->tick - audio->event_states[event].cooldown_started_tick) < definition->behavior->cooldown_ticks) {
+    if (definition->behavior->cooldown_ticks != 0u && audio->event_states[event].selection.previous_index != AUDIO_SELECTION_INDEX_NONE &&
+        (audio->tick - audio->event_states[event].cooldown_started_tick) < definition->behavior->cooldown_ticks) {
         return false;
     }
 
@@ -52,9 +63,7 @@ bool unsigned_audio_trigger(UAudioManager *audio, UAudioEventId event) {
 
     UAudioEventState next_state = audio->event_states[event];
     if (next_state.selection.active_key != set->key) {
-        next_state.selection = (UAudioSelectionState){0};
-        next_state.selection.active_key = set->key;
-        next_state.selection.previous_index = 0xffu;
+        audio_selection_reset(&next_state.selection, set->key);
     }
 
     u16 next_random_state = audio->random_state;

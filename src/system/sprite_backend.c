@@ -110,18 +110,26 @@ static void sprite_backend_write_graphics_full(const USprite *sprite, const UFra
 
         if (!flip_y) {
             u16 tile = (u16)(frame_first_tile + source_column);
+#if defined(__m68k__)
+            unsigned_m68k_vram_stream_tile_attributes(REG_VRAMRW, tile, attributes, height, (s16)width);
+#else
             for (u8 row = 0u; row < height; ++row) {
                 *REG_VRAMRW = tile;
                 *REG_VRAMRW = attributes;
                 tile = (u16)(tile + width);
             }
+#endif
         } else {
             u16 tile = (u16)(frame_first_tile + last_row_offset + source_column);
+#if defined(__m68k__)
+            unsigned_m68k_vram_stream_tile_attributes(REG_VRAMRW, tile, attributes, height, (s16)-(s16)width);
+#else
             for (u8 row = 0u; row < height; ++row) {
                 *REG_VRAMRW = tile;
                 *REG_VRAMRW = attributes;
                 tile = (u16)(tile - width);
             }
+#endif
         }
     }
 }
@@ -149,10 +157,14 @@ static void sprite_backend_write_unused_rows(const USprite *sprite) {
         const u16 hardware_sprite = (u16)(sprite->render.layout.first_sprite + column);
         *REG_VRAMADDR = scb1_address;
         scb1_address = (u16)(scb1_address + 64u);
+#if defined(__m68k__)
+        unsigned_m68k_vram_fill_pair(REG_VRAMRW, definition->transparent_tile, 0u, (u16)(UNSIGNED_SPRITE_MAX_HEIGHT_TILES - definition->height_tiles));
+#else
         for (u8 row = definition->height_tiles; row < UNSIGNED_SPRITE_MAX_HEIGHT_TILES; ++row) {
             *REG_VRAMRW = definition->transparent_tile;
             *REG_VRAMRW = 0u;
         }
+#endif
 
         sprite_padding_state[hardware_sprite] = (USpritePaddingState){
             .transparent_tile = definition->transparent_tile,
@@ -181,16 +193,24 @@ static void sprite_backend_write_tiles(const USprite *sprite, const UFrame *fram
 
         if (!flip_y) {
             u16 tile = (u16)(frame_first_tile + source_column);
+#if defined(__m68k__)
+            unsigned_m68k_vram_stream_arithmetic(REG_VRAMRW, tile, height, (s16)width);
+#else
             for (u8 row = 0u; row < height; ++row) {
                 *REG_VRAMRW = tile;
                 tile = (u16)(tile + width);
             }
+#endif
         } else {
             u16 tile = (u16)(frame_first_tile + last_row_offset + source_column);
+#if defined(__m68k__)
+            unsigned_m68k_vram_stream_arithmetic(REG_VRAMRW, tile, height, (s16)-(s16)width);
+#else
             for (u8 row = 0u; row < height; ++row) {
                 *REG_VRAMRW = tile;
                 tile = (u16)(tile - width);
             }
+#endif
         }
     }
 }
@@ -204,9 +224,13 @@ static void sprite_backend_write_attributes(const USprite *sprite) {
     for (u8 column = 0u; column < sprite->render.layout.sprite_count; ++column) {
         *REG_VRAMADDR = scb1_address;
         scb1_address = (u16)(scb1_address + 64u);
+#if defined(__m68k__)
+        unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, attributes, sprite->definition->height_tiles);
+#else
         for (u8 row = 0u; row < sprite->definition->height_tiles; ++row) {
             *REG_VRAMRW = attributes;
         }
+#endif
     }
 }
 
@@ -214,9 +238,13 @@ static void sprite_backend_write_attributes(const USprite *sprite) {
 static void sprite_backend_write_shrink(const USprite *sprite, u16 scb2) {
     unsigned_neogeo_vram_set_mod(1u);
     *REG_VRAMADDR = (u16)(ADDR_SCB2 + sprite->render.layout.first_sprite);
+#if defined(__m68k__)
+    unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, scb2, sprite->render.layout.sprite_count);
+#else
     for (u8 column = 0u; column < sprite->render.layout.sprite_count; ++column) {
         *REG_VRAMRW = scb2;
     }
+#endif
 }
 
 /** Rebuilds SCB3 with one Y/height driver followed by sticky chained columns. */
@@ -224,9 +252,15 @@ static void sprite_backend_write_chain(const USprite *sprite, s16 screen_y) {
     unsigned_neogeo_vram_set_mod(1u);
     *REG_VRAMADDR = (u16)(ADDR_SCB3 + sprite->render.layout.first_sprite);
     *REG_VRAMRW = sprite_backend_scb3(sprite, screen_y);
+#if defined(__m68k__)
+    if (sprite->render.layout.sprite_count > 1u) {
+        unsigned_m68k_vram_fill_nonzero(REG_VRAMRW, SPRITE_SCB3_STICKY, (u16)(sprite->render.layout.sprite_count - 1u));
+    }
+#else
     for (u8 column = 1u; column < sprite->render.layout.sprite_count; ++column) {
         *REG_VRAMRW = SPRITE_SCB3_STICKY;
     }
+#endif
 }
 
 /** Uploads the chain driver X coordinate to SCB4 in Neo Geo fixed hardware units. */
@@ -356,12 +390,12 @@ void unsigned_sprite_backend_write_prepared_effect_positions(const USprite *spri
 
     unsigned_neogeo_vram_set_mod(1u);
 
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
+#if defined(__m68k__)
     const u16 source_stride_words = (u16)(sizeof(*columns) / sizeof(u16));
 #endif
 
     *REG_VRAMADDR = (u16)(ADDR_SCB2 + first_sprite);
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
+#if defined(__m68k__)
     unsigned_m68k_vram_stream_strided(REG_VRAMRW, &columns[0].scb2, sprite_count, source_stride_words);
 #else
     for (u8 column = 0u; column < sprite_count; ++column) {
@@ -370,7 +404,7 @@ void unsigned_sprite_backend_write_prepared_effect_positions(const USprite *spri
 #endif
 
     *REG_VRAMADDR = (u16)(ADDR_SCB3 + first_sprite);
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
+#if defined(__m68k__)
     unsigned_m68k_vram_stream_strided(REG_VRAMRW, &columns[0].scb3, sprite_count, source_stride_words);
 #else
     for (u8 column = 0u; column < sprite_count; ++column) {
@@ -379,7 +413,7 @@ void unsigned_sprite_backend_write_prepared_effect_positions(const USprite *spri
 #endif
 
     *REG_VRAMADDR = (u16)(ADDR_SCB4 + first_sprite);
-#if UNSIGNED_M68K_VRAM_ASM_ACTIVE
+#if defined(__m68k__)
     unsigned_m68k_vram_stream_strided(REG_VRAMRW, &columns[0].scb4, sprite_count, source_stride_words);
 #else
     for (u8 column = 0u; column < sprite_count; ++column) {
@@ -400,11 +434,7 @@ void unsigned_sprite_backend_break_chain(u16 hardware_sprite) {
 }
 
 void unsigned_sprite_backend_clear_range(u16 first_sprite, u16 sprite_count) {
-    unsigned_neogeo_vram_set_mod(1u);
-    *REG_VRAMADDR = (u16)(ADDR_SCB3 + first_sprite);
-    for (u16 column = 0u; column < sprite_count; ++column) {
-        *REG_VRAMRW = 0u;
-    }
+    unsigned_neogeo_vram_clear_scb3_range(first_sprite, sprite_count);
 }
 
 void unsigned_sprite_backend_hide_chain(const USprite *sprite) {

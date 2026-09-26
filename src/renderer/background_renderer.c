@@ -102,15 +102,7 @@ static void background_renderer_prepare_uploads(const UBackgroundLayer *layer, U
             upload->full = full;
             next->loaded_source_columns[slot] = source_column;
 
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-            ++frame_plan->stats.background_column_uploads;
-            if (full) {
-                ++frame_plan->stats.background_full_column_uploads;
-            }
-            unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, (u32)definition->height_tiles * (full ? 2u : 1u));
-#else
             unsigned_render_plan_mark_work(frame_plan);
-#endif
         }
 
         ++slot;
@@ -139,11 +131,6 @@ static void background_renderer_prepare_chained(UBackgroundLayerRenderState *nex
     if (!next->chained_valid || next->rendered_y != y) {
         transform_dirty |= U_BACKGROUND_TRANSFORM_DIRTY_Y;
     }
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-    const u8 driver_count = plan->leftmost_slot != 0u ? 2u : 1u;
-    u32 words = 0u;
-#endif
-
     plan->transform_mode = U_BACKGROUND_TRANSFORM_PLAN_CHAINED;
     plan->base_x = x;
     plan->y = y;
@@ -151,24 +138,7 @@ static void background_renderer_prepare_chained(UBackgroundLayerRenderState *nex
     plan->transform_dirty = transform_dirty;
 
     if (transform_dirty != 0u) {
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-        if ((transform_dirty & U_BACKGROUND_TRANSFORM_DIRTY_SHRINK) != 0u) {
-            words += plan->columns;
-        }
-        if ((transform_dirty & U_BACKGROUND_TRANSFORM_DIRTY_LAYOUT) != 0u) {
-            words += plan->columns + driver_count;
-        } else {
-            if ((transform_dirty & U_BACKGROUND_TRANSFORM_DIRTY_Y) != 0u) {
-                words += driver_count;
-            }
-            if ((transform_dirty & U_BACKGROUND_TRANSFORM_DIRTY_X) != 0u) {
-                words += driver_count;
-            }
-        }
-        unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, words);
-#else
         unsigned_render_plan_mark_work(frame_plan);
-#endif
     }
 
     next->rendered_scb2 = scb2;
@@ -187,11 +157,7 @@ static void background_renderer_prepare_per_column(const UViewport *viewport, UB
         unsigned_background_backend_encode_prepared_column(&plan->effect_columns[column], sampled.zoom_offset, (s16)(column_x + sampled.offset_x), (s16)((s32)plan->y + sampled.offset_y), plan->layer->definition->height_tiles);
         column_x += 16;
     }
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-    unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, (u32)plan->columns * 3u);
-#else
     unsigned_render_plan_mark_work(frame_plan);
-#endif
 
     next->chained_valid = false;
 }
@@ -218,11 +184,7 @@ static void background_renderer_reset_plan(UBackgroundRenderPlan *plan) {
 static void background_renderer_plan_hide(UBackgroundLayerRenderPlan *layer_plan, const UBackgroundLayerRenderState *current, URenderPlan *frame_plan) {
     layer_plan->hide_first_sprite = current->rendered_first_sprite;
     layer_plan->hide_columns = current->rendered_columns;
-#if UNSIGNED_RENDERER_DIAGNOSTICS
-    unsigned_render_plan_add_words(frame_plan, U_RENDER_PRIORITY_NORMAL, current->rendered_columns);
-#else
     unsigned_render_plan_mark_work(frame_plan);
-#endif
 }
 
 void unsigned_background_renderer_init(UBackgroundRenderState *state) {

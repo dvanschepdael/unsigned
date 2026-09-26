@@ -5,13 +5,14 @@
 
 #include "core/pool/pool.h"
 
-void unsigned_pool_init(UPoolInstanceContainer *pool) {
-    pool->count = 0u;
-    pool->active_span = 0u;
-    pool->revision = 0u;
+void unsigned_pool_init(UPoolInstanceContainer *pool, UPoolInstance *instances, u8 capacity) {
+    *pool = (UPoolInstanceContainer){
+        .capacity = capacity,
+        .instances = instances,
+    };
 
-    for (u8 i = 0u; i < pool->capacity; ++i) {
-        pool->instances[i] = (UPoolInstance){
+    for (u8 i = 0u; i < capacity; ++i) {
+        instances[i] = (UPoolInstance){
             .index = i,
         };
     }

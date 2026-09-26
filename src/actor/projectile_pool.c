@@ -8,14 +8,13 @@
 #include <stdint.h>
 
 UProjectilePoolInstance *unsigned_projectile_pool_reserve(UPoolInstanceContainer *pool, UProjectile *projectile) {
-    UProjectilePoolInstance *instance = unsigned_pool_reserve(pool);
+    UProjectilePoolInstance *instance = unsigned_pool_reserve_args(pool, projectile);
 
     unsigned_physics_trajectory_project(&projectile->trajectory, projectile->projection, projectile->projection_origin, &projectile->ground_position, &projectile->visual_position);
     projectile->actor->position = projectile->visual_position;
     unsigned_actor_collision_state_reset(&projectile->actor->collision);
     projectile->actor->collision.resolve_immediately = true;
     projectile->collision_latched = false;
-    instance->args = projectile;
     instance->elapsed = 0u;
     return instance;
 }

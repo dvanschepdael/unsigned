@@ -1,19 +1,11 @@
 /**
  * @file config.h
- * @brief Build-time renderer instrumentation and scratch policy.
+ * @brief Build-time renderer scratch policy.
  */
 
 #ifndef UNSIGNED_RENDERER_CONFIG_H
 #define UNSIGNED_RENDERER_CONFIG_H
 
-/*
- * Runtime builds keep instrumentation disabled by default. Exact VRAM-word accounting and
- * scanline-pressure measurement are useful for tests/tools, but they are deliberately excluded
- * from the 68000 hot path. Host tests override this to 1 from the Makefile.
- */
-#ifndef UNSIGNED_RENDERER_DIAGNOSTICS
-#define UNSIGNED_RENDERER_DIAGNOSTICS 0
-#endif
 
 /*
  * CPU-side scratch used to freeze sprite effects before VBlank.
