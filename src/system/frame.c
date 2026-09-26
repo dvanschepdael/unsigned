@@ -46,7 +46,8 @@ u32 unsigned_frame_end(void) {
     const u16 elapsed_lines = end_line >= frame_begin_line
                                   ? (u16)(end_line - frame_begin_line)
                                   : (u16)(end_line + frame_total_lines - frame_begin_line);
-    const u16 elapsed_lines_x3 = (u16)(elapsed_lines + elapsed_lines + elapsed_lines);
+    const u16 conservative_elapsed_lines = (u16)(elapsed_lines + 1u);
+    const u16 elapsed_lines_x3 = (u16)(conservative_elapsed_lines + conservative_elapsed_lines + conservative_elapsed_lines);
     const u32 elapsed_cycles = (u32)elapsed_lines_x3 << 8u;
 
     return frame_total_cycles - elapsed_cycles;
