@@ -13,13 +13,21 @@
 
 #include <stdint.h>
 
+enum {
+    NPC_AI_SLOT_ROUTE_DIRECT = 0u,
+    NPC_AI_SLOT_ROUTE_CLEAR_X = 1u,
+    NPC_AI_SLOT_ROUTE_CLEAR_DEPTH = 2u,
+    NPC_AI_SLOT_ROUTE_CROSS = 3u,
+    NPC_AI_SLOT_ROUTE_FINAL = 4u,
+};
+
 /* ------------------------------------------------------------------------- */
 /* Shared level coordinator                                                  */
 /* ------------------------------------------------------------------------- */
 
 /** Clear tactical owners for one physical player target slot. */
 static void npc_ai_target_slots_clear(UNpcAiTargetSlots *target) {
-    for (u8 i = 0u; i < UNSIGNED_NPC_AI_MAX_ATTACK_SLOTS; ++i) {
+    for (u8 i = 0u; i < UNSIGNED_PLAYER_MAX_SLOTS; ++i) {
         target->owners[i] = 0u;
     }
 }
@@ -36,7 +44,7 @@ void unsigned_actor_npc_ai_world_reset(UNpcAiWorld *world) {
     /* Force the next sync for every possible wrapped u16 pool revision. */
     world->player_revision = (u16)(world->players->revision - 1u);
 
-    for (u8 i = 0u; i < UNSIGNED_NPC_AI_MAX_TARGETS; ++i) {
+    for (u8 i = 0u; i < UNSIGNED_PLAYER_MAX; ++i) {
         world->targets[i].generation = 0u;
         npc_ai_target_slots_clear(&world->targets[i]);
     }
@@ -135,6 +143,9 @@ static void npc_ai_release_slot(UNpc *npc) {
     }
 
     ai->assigned_slot = UNSIGNED_NPC_AI_SLOT_NONE;
+    ai->slot_route_phase = NPC_AI_SLOT_ROUTE_DIRECT;
+    ai->slot_route_side = 0;
+    ai->slot_route_depth_side = 0;
 }
 
 /** Return whether the tracked attack slot still represents the same active ability reservation. */
@@ -206,15 +217,13 @@ static void npc_ai_move_toward(UNpc *npc, Vec2 goal) {
 /** Test the authored rectangular acceptance radius used by approach/roam/back-step movement. */
 static bool npc_ai_has_reached(const UNpc *npc, Vec2 goal) {
     const Vec2 position = npc->character->actor.position;
-    const UNpcAiProfile *profile = npc->ai.profile;
-    return npc_ai_abs_s32((s32)goal.x - position.x) <= (u32)profile->arrival_tolerance_x &&
-           npc_ai_abs_s32((s32)goal.y - position.y) <= (u32)profile->arrival_tolerance_y;
+    return npc_ai_abs_s32((s32)goal.x - position.x) <= 1 && npc_ai_abs_s32((s32)goal.y - position.y) <= 1;
 }
 
 /** Generate an integer offset in [-radius, radius] without modulo/division. */
 static s16 npc_ai_random_offset(u16 *state, s16 radius) {
     const u16 magnitude = unsigned_math_random_bounded_u16(state, (u16)radius + 1u);
-    return (unsigned_math_random_u16(state) & 1u) != 0u ? (s16)magnitude : (s16)-(s16)magnitude;
+    return (unsigned_math_random_u16(state) & 1u) != 0u ? (s16)magnitude : (s16) - (s16)magnitude;
 }
 
 /** Resolve a stored target-relative movement offset against the target's current position. */
@@ -239,6 +248,73 @@ static s16 npc_ai_target_side(const UNpc *npc, const UCharacter *target) {
         return 1;
     }
     return npc->character->facing_right ? -1 : 1;
+}
+
+/** Return the authored horizontal side of one attack slot relative to the target. */
+static s16 npc_ai_slot_side(const UNpc *npc, u8 slot) {
+    const s16 x = npc->ai.profile->attack_slot_offsets[slot].x;
+    if (x < 0) {
+        return -1;
+    }
+    if (x > 0) {
+        return 1;
+    }
+    return 0;
+}
+
+/** Return whether one depth side can preserve the configured bypass clearance in bounds. */
+static bool npc_ai_slot_bypass_depth_has_clearance(const UNpcAiProfile *profile, const UCharacter *target, s16 depth_side) {
+    if (profile->movement_bounds == NULL) {
+        return true;
+    }
+
+    if (depth_side < 0) {
+        return (s32)target->actor.position.y - profile->movement_bounds->min_y >= profile->slot_bypass_clearance_y;
+    }
+    return (s32)profile->movement_bounds->max_y - target->actor.position.y >= profile->slot_bypass_clearance_y;
+}
+
+/** Pick the shortest safe depth side, preferring a side that has the full authored clearance. */
+static s16 npc_ai_choose_slot_bypass_depth_side(UNpc *npc, const UCharacter *target) {
+    const UNpcAiProfile *profile = npc->ai.profile;
+    const s32 delta_y = (s32)npc->character->actor.position.y - target->actor.position.y;
+    s16 preferred = delta_y < 0 ? -1 : (delta_y > 0 ? 1 : ((unsigned_math_random_u16(&npc->ai.random_state) & 1u) != 0u ? 1 : -1));
+
+    if (profile->movement_bounds == NULL) {
+        return preferred;
+    }
+
+    const s32 above = (s32)target->actor.position.y - profile->movement_bounds->min_y;
+    const s32 below = (s32)profile->movement_bounds->max_y - target->actor.position.y;
+
+    if (npc_ai_slot_bypass_depth_has_clearance(profile, target, preferred)) {
+        return preferred;
+    }
+    return above >= below ? -1 : 1;
+}
+
+/** Resolve one target-relative detour corner while preserving movement bounds. */
+static Vec2 npc_ai_slot_bypass_goal(const UNpc *npc, const UCharacter *target, s16 horizontal_side) {
+    const UNpcAiProfile *profile = npc->ai.profile;
+    const Vec2 slot_offset = profile->attack_slot_offsets[npc->ai.assigned_slot];
+    const s16 slot_distance = (s16)npc_ai_abs_s32(slot_offset.x);
+    const s16 clearance_x = slot_distance > profile->slot_bypass_clearance_x ? slot_distance : profile->slot_bypass_clearance_x;
+    Vec2 goal = {
+        .x = unsigned_math_saturate_s16((s32)target->actor.position.x + (s32)horizontal_side * clearance_x),
+        .y = unsigned_math_saturate_s16((s32)target->actor.position.y + (s32)npc->ai.slot_route_depth_side * profile->slot_bypass_clearance_y),
+    };
+
+    if (profile->movement_bounds != NULL) {
+        unsigned_physics_movement_constrain(&goal, profile->movement_bounds);
+    }
+    return goal;
+}
+
+/** Start an orthogonal route: clear X if needed, move to the safe depth lane, cross, then return to the slot. */
+static void npc_ai_begin_slot_bypass(UNpc *npc, const UCharacter *target, s16 current_side) {
+    npc->ai.slot_route_side = (s8)current_side;
+    npc->ai.slot_route_depth_side = (s8)npc_ai_choose_slot_bypass_depth_side(npc, target);
+    npc->ai.slot_route_phase = NPC_AI_SLOT_ROUTE_CLEAR_X;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -330,11 +406,19 @@ static UTaskState npc_ai_task_acquire_slot(UStateGraph *graph, void *context) {
 
     target_slots->owners[best_slot] = ai->owner_token;
     ai->assigned_slot = best_slot;
+    ai->slot_route_phase = NPC_AI_SLOT_ROUTE_DIRECT;
+
+    const s16 slot_side = npc_ai_slot_side(npc, best_slot);
+    const s16 current_side = npc_ai_target_side(npc, target_player->character);
+    if (slot_side != 0 && current_side != slot_side) {
+        npc_ai_begin_slot_bypass(npc, target_player->character, current_side);
+    }
     return U_TASK_SUCCESS;
 }
 
 static UTaskState npc_ai_task_move_to_slot(UStateGraph *graph, void *context) {
     UNpc *npc = context;
+    UNpcAiRuntime *ai = &npc->ai;
     UPlayer *target = npc_ai_target_player(npc);
     (void)graph;
 
@@ -342,13 +426,119 @@ static UTaskState npc_ai_task_move_to_slot(UStateGraph *graph, void *context) {
         return U_TASK_FAILED;
     }
 
-    const Vec2 goal = npc_ai_slot_world_position(npc, target->character, npc->ai.assigned_slot);
-    if (npc_ai_has_reached(npc, goal)) {
-        return U_TASK_SUCCESS;
+    const UCharacter *target_character = target->character;
+    const s16 slot_side = npc_ai_slot_side(npc, ai->assigned_slot);
+    const s16 current_side = npc_ai_target_side(npc, target_character);
+
+    /* A direct approach is valid only while the NPC already sits on the slot side. Once a bypass
+     * starts, keep its orthogonal route instead of collapsing back to a diagonal as soon as the
+     * horizontal crossing passes the player's center line. */
+    if (slot_side != 0) {
+        if (ai->slot_route_phase == NPC_AI_SLOT_ROUTE_DIRECT && current_side != slot_side) {
+            npc_ai_begin_slot_bypass(npc, target_character, current_side);
+        } else if ((ai->slot_route_phase == NPC_AI_SLOT_ROUTE_CLEAR_X ||
+                    ai->slot_route_phase == NPC_AI_SLOT_ROUTE_CLEAR_DEPTH) &&
+                   current_side != 0 && current_side != ai->slot_route_side) {
+            npc_ai_begin_slot_bypass(npc, target_character, current_side);
+        }
+
+        /* If the selected arena edge no longer leaves the authored depth clearance, rebuild the
+         * U-shaped route on the opposite depth side. Clearing X again keeps the lane change away
+         * from touch/grab range. */
+        if (ai->slot_route_phase != NPC_AI_SLOT_ROUTE_DIRECT &&
+            !npc_ai_slot_bypass_depth_has_clearance(ai->profile, target_character, ai->slot_route_depth_side) &&
+            npc_ai_slot_bypass_depth_has_clearance(ai->profile, target_character, (s16)-ai->slot_route_depth_side)) {
+            const s16 replan_side = current_side != 0 ? current_side : ai->slot_route_side;
+            ai->slot_route_side = (s8)replan_side;
+            ai->slot_route_depth_side = (s8)-ai->slot_route_depth_side;
+            ai->slot_route_phase = NPC_AI_SLOT_ROUTE_CLEAR_X;
+        }
     }
 
-    npc_ai_move_toward(npc, goal);
-    return npc_ai_has_reached(npc, goal) ? U_TASK_SUCCESS : U_TASK_RUNNING;
+    Vec2 *position = &npc->character->actor.position;
+    const Vec2 slot_goal = npc_ai_slot_world_position(npc, target_character, ai->assigned_slot);
+
+    if (ai->slot_route_phase == NPC_AI_SLOT_ROUTE_DIRECT) {
+        if (npc_ai_has_reached(npc, slot_goal)) {
+            *position = slot_goal;
+            return U_TASK_SUCCESS;
+        }
+        npc_ai_move_toward(npc, slot_goal);
+        if (npc_ai_has_reached(npc, slot_goal)) {
+            *position = slot_goal;
+            return U_TASK_SUCCESS;
+        }
+        return U_TASK_RUNNING;
+    }
+
+    const Vec2 route_corner = npc_ai_slot_bypass_goal(npc, target_character, ai->slot_route_side);
+
+    if (ai->slot_route_phase == NPC_AI_SLOT_ROUTE_CLEAR_X) {
+        /* First move only horizontally away from the player when the NPC is inside the authored
+         * side clearance. If it is already farther out, preserve that X and start the vertical leg. */
+        const bool x_is_clear = ai->slot_route_side < 0 ? position->x <= route_corner.x : position->x >= route_corner.x;
+        if (x_is_clear) {
+            ai->slot_route_phase = NPC_AI_SLOT_ROUTE_CLEAR_DEPTH;
+            return U_TASK_RUNNING;
+        }
+
+        position->x = npc_ai_move_axis(position->x, route_corner.x, ai->profile->horizontal_move_speed, ai->scheduled_elapsed);
+        if (npc_ai_abs_s32((s32)route_corner.x - position->x) <= 1u) {
+            position->x = route_corner.x;
+            ai->slot_route_phase = NPC_AI_SLOT_ROUTE_CLEAR_DEPTH;
+        }
+        return U_TASK_RUNNING;
+    }
+
+    if (ai->slot_route_phase == NPC_AI_SLOT_ROUTE_CLEAR_DEPTH) {
+        /* Second leg is vertical only: enter the safe lane without drifting toward the player. */
+        position->y = npc_ai_move_axis(position->y, route_corner.y, ai->profile->vertical_move_speed, ai->scheduled_elapsed);
+        if (npc_ai_abs_s32((s32)route_corner.y - position->y) <= 1u) {
+            position->y = route_corner.y;
+            ai->slot_route_phase = NPC_AI_SLOT_ROUTE_CROSS;
+        }
+        return U_TASK_RUNNING;
+    }
+
+    if (ai->slot_route_phase == NPC_AI_SLOT_ROUTE_CROSS) {
+        /* Keep the lane target-relative. If the player changes depth, restore the lane before
+         * moving X. The crossing itself is then a single straight horizontal segment. */
+        if (npc_ai_abs_s32((s32)route_corner.y - position->y) > 1u) {
+            position->y = npc_ai_move_axis(position->y, route_corner.y, ai->profile->vertical_move_speed, ai->scheduled_elapsed);
+            if (npc_ai_abs_s32((s32)route_corner.y - position->y) <= 1u) {
+                position->y = route_corner.y;
+            }
+            return U_TASK_RUNNING;
+        }
+
+        position->y = route_corner.y;
+        position->x = npc_ai_move_axis(position->x, slot_goal.x, ai->profile->horizontal_move_speed, ai->scheduled_elapsed);
+        if (npc_ai_abs_s32((s32)slot_goal.x - position->x) <= 1u) {
+            position->x = slot_goal.x;
+            ai->slot_route_phase = NPC_AI_SLOT_ROUTE_FINAL;
+        }
+        return U_TASK_RUNNING;
+    }
+
+    /* Final leg returns vertically to the exact authored slot. If the player moves horizontally,
+     * correct X first while still away in depth, then continue the vertical return. */
+    if (npc_ai_abs_s32((s32)slot_goal.x - position->x) > 1u) {
+        position->x = npc_ai_move_axis(position->x, slot_goal.x, ai->profile->horizontal_move_speed, ai->scheduled_elapsed);
+        if (npc_ai_abs_s32((s32)slot_goal.x - position->x) <= 1u) {
+            position->x = slot_goal.x;
+        }
+        return U_TASK_RUNNING;
+    }
+
+    position->x = slot_goal.x;
+    position->y = npc_ai_move_axis(position->y, slot_goal.y, ai->profile->vertical_move_speed, ai->scheduled_elapsed);
+    if (!npc_ai_has_reached(npc, slot_goal)) {
+        return U_TASK_RUNNING;
+    }
+
+    *position = slot_goal;
+    ai->slot_route_phase = NPC_AI_SLOT_ROUTE_DIRECT;
+    return U_TASK_SUCCESS;
 }
 
 static UTaskState npc_ai_task_attack(UStateGraph *graph, void *context) {
@@ -468,9 +658,7 @@ static void npc_ai_enter_step_back(UStateGraph *graph, void *context) {
         npc_ai_face_target(npc, target_character);
         ai->target_offset = (Vec2){
             .x = unsigned_math_saturate_s16((s32)side * standoff),
-            .y = unsigned_math_saturate_s16(
-                (s32)npc->character->actor.position.y - target_character->actor.position.y +
-                npc_ai_random_offset(&ai->random_state, profile->step_back_depth)),
+            .y = unsigned_math_saturate_s16((s32)npc->character->actor.position.y - target_character->actor.position.y + npc_ai_random_offset(&ai->random_state, profile->step_back_depth)),
         };
     }
     npc_ai_play_loop(npc, profile->move_animation);

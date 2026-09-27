@@ -18,6 +18,7 @@
 #define UNSIGNED_ACTOR_NPC_AI_H
 
 #include "actor/npc_config.h"
+#include "actor/player_config.h"
 #include "core/pool/pool.h"
 #include "core/tlss/tlss.h"
 #include "gameplay/tag.h"
@@ -43,10 +44,11 @@ struct UNpc;
  * object per NPC: control blockers temporarily pause decision work, while stop tags cancel the
  * tracked attack, release the tactical slot and stop the graph until the tag disappears.
  *
- * @invariant `attack_slot_count` is in 1..UNSIGNED_NPC_AI_MAX_ATTACK_SLOTS and
+ * @invariant `attack_slot_count` is in 1..UNSIGNED_PLAYER_MAX_SLOTS and
  *            `attack_slot_offsets` contains that many entries.
  * @invariant `attack_ability_tag != UNSIGNED_GAMEPLAY_TAG_NONE` and resolves in the NPC catalog.
  * @invariant movement speeds/tolerances/radii/distances are non-negative,
+ *            `slot_bypass_clearance_x > 0`, `slot_bypass_clearance_y > 0`,
  *            `roam_min_distance <= roam_radius_x` and
  *            `step_back_min_distance <= step_back_max_distance`.
  * @invariant animation indices are valid for the NPC sprite when they are not
@@ -61,8 +63,10 @@ typedef struct UNpcAiProfile {
     UGameplayTag attack_ability_tag;
     s16 horizontal_move_speed;
     s16 vertical_move_speed;
-    s16 arrival_tolerance_x;
-    s16 arrival_tolerance_y;
+    /** Horizontal clearance used by the lightweight detour when a reserved slot is across the target. */
+    s16 slot_bypass_clearance_x;
+    /** Depth clearance used while crossing around, rather than through, the target. */
+    s16 slot_bypass_clearance_y;
     /** Minimum horizontal target standoff used while waiting for an attack slot. */
     s16 roam_min_distance;
     /** Maximum horizontal target standoff used while waiting for an attack slot. */
@@ -83,7 +87,7 @@ typedef struct UNpcAiTargetSlots {
     /** Player reservation generation currently represented by `owners`; zero means no active target. */
     u16 generation;
     /** Zero means free; otherwise the value is the stable NPC pool slot + 1. */
-    u8 owners[UNSIGNED_NPC_AI_MAX_ATTACK_SLOTS];
+    u8 owners[UNSIGNED_PLAYER_MAX_SLOTS];
 } UNpcAiTargetSlots;
 
 /**
@@ -96,7 +100,7 @@ typedef struct UNpcAiWorld {
     UPoolInstanceContainer *players;
     struct UAbilityPool *abilities;
     u16 player_revision;
-    UNpcAiTargetSlots targets[UNSIGNED_NPC_AI_MAX_TARGETS];
+    UNpcAiTargetSlots targets[UNSIGNED_PLAYER_MAX];
 } UNpcAiWorld;
 
 /** Mutable state required only by NPCs configured for the built-in Beat'Em Up policy. */
@@ -116,6 +120,12 @@ typedef struct UNpcAiRuntime {
     u16 scheduled_elapsed;
     u8 target_index;
     u8 assigned_slot;
+    /** 0 = direct, 1 = clear X, 2 = clear depth, 3 = cross, 4 = return vertically to slot. */
+    u8 slot_route_phase;
+    /** Horizontal side where the detour started: -1 = left, +1 = right. */
+    s8 slot_route_side;
+    /** Depth side used by the detour: -1 = above, +1 = below. */
+    s8 slot_route_depth_side;
     u8 attack_index;
     /** Stable NPC pool slot encoded as slot + 1 for the shared reservation table. */
     u8 owner_token;
@@ -124,7 +134,7 @@ typedef struct UNpcAiRuntime {
 /**
  * @brief Initializes the level-owned target/ability coordinator over existing fixed pools.
  * @pre `world`, `players` and `abilities` are valid for the complete level lifetime.
- * @pre `players->capacity <= UNSIGNED_NPC_AI_MAX_TARGETS`.
+ * @pre `players->capacity <= UNSIGNED_PLAYER_MAX`.
  */
 void unsigned_actor_npc_ai_world_init(UNpcAiWorld *world, UPoolInstanceContainer *players, struct UAbilityPool *abilities);
 

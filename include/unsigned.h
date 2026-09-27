@@ -17,6 +17,7 @@
 #include <actor/object.h>
 #include <actor/object_pool.h>
 #include <actor/player.h>
+#include <actor/player_config.h>
 #include <actor/player_pool.h>
 #include <actor/pools.h>
 #include <actor/projectile.h>

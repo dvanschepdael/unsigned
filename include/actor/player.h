@@ -6,6 +6,7 @@
 #ifndef UNSIGNED_ACTOR_PLAYER_H
 #define UNSIGNED_ACTOR_PLAYER_H
 
+#include "actor/player_config.h"
 #include "actor/character.h"
 #include "gameplay/ability_pool.h"
 #include "input/input.h"
