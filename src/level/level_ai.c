@@ -6,16 +6,16 @@
 #include "actor/npc.h"
 #include "actor/npc_ai.h"
 #include "actor/npc_config.h"
-#include "display/viewport/viewport_internal.h"
+#include "display/camera/camera_internal.h"
 #include "level/level_internal.h"
 
-/** Classifies one NPC as active, off-screen or dormant from viewport distance/visibility. */
-static void level_npc_update_activity(UNpc *npc, const UViewportWorldBounds *bounds) {
+/** Classifies one NPC as active, off-screen or dormant from camera distance/visibility. */
+static void level_npc_update_activity(UNpc *npc, const UCameraWorldBounds *bounds) {
     const UActor *actor = &npc->character->actor;
     const USpriteDefinition *sprite_definition = actor->sprite.definition;
     const s32 world_left = (s32)actor->position.x + actor->sprite.offset.x;
     const s32 world_top = (s32)actor->position.y + actor->sprite.offset.y;
-    const bool in_active_region = unsigned_viewport_world_bounds_intersects_unchecked(
+    const bool in_active_region = unsigned_camera_world_bounds_intersects_unchecked(
         bounds,
         world_left,
         world_top,
@@ -34,14 +34,14 @@ static void level_npc_update_activity(UNpc *npc, const UViewportWorldBounds *bou
     npc->activity = in_active_region ? U_NPC_ACTIVITY_ACTIVE : U_NPC_ACTIVITY_OFFSCREEN;
 }
 
-void unsigned_level_ai_tick(ULevel *level, const UViewport *viewport) {
+void unsigned_level_ai_tick(ULevel *level) {
     UPoolInstanceContainer *pool = &level->actor_pools->npcs;
     if (pool->count == 0u) {
         return;
     }
 
-    UViewportWorldBounds bounds;
-    unsigned_viewport_world_bounds(viewport, &bounds);
+    UCameraWorldBounds bounds;
+    unsigned_camera_world_bounds(&level->camera, &bounds);
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(pool); ++i) {
         UPoolInstance *instance = &pool->instances[i];

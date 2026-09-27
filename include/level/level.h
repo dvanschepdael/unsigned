@@ -7,6 +7,7 @@
 #define UNSIGNED_LEVEL_H
 
 #include "core/types.h"
+#include "display/camera/camera.h"
 #include "level/level_definition.h"
 
 struct UActor;
@@ -17,7 +18,6 @@ struct UCollisionManagerConfig;
 struct UCollisionBox;
 struct ULevelSpawnStorage;
 struct UTLSSScaleConfig;
-struct UViewport;
 
 typedef struct ULevelRuntimeConfig {
     struct UActorPoolSet *actor_pools;
@@ -26,15 +26,18 @@ typedef struct ULevelRuntimeConfig {
     const struct UCollisionManagerConfig *collision_config;
     const struct UCollisionBox **collision_layer_boxes;
     struct UActor **actor_instances;
+    /** Initial screen projection used by the level-owned camera. */
+    UCameraConfig camera;
 } ULevelRuntimeConfig;
 
 /**
  * @brief Initializes reusable level runtime state over caller-owned actor/collision/spawn storage.
  * @details No content is loaded until `unsigned_level_load()` is called.
- * @param config Caller-owned composition pointers consumed during initialization.
+ * @param config Caller-owned composition pointers and camera projection consumed during initialization.
  * @pre `config` and all runtime/storage pointers it contains are valid for the lifetime of `level`.
  * @pre The combined actor-pool capacity fits `u8`, and `actor_instances` provides that many entries.
  * @pre Spawn/collision storage matches the authored pool/channel capacities.
+ * @pre `config->camera.width` and `config->camera.height` are non-zero.
  */
 void unsigned_level_init(ULevel *level, const ULevelRuntimeConfig *config);
 
@@ -53,11 +56,11 @@ void unsigned_level_set_tlss_config(ULevel *level, const struct UTLSSScaleConfig
 void unsigned_level_load(ULevel *level, const ULevelDefinition *definition, void *context);
 
 /**
- * @brief Advances one loaded-level frame using the current input and viewport.
- * @pre `level` is loaded and `viewport` belongs to the active game runtime.
+ * @brief Advances one loaded-level frame using the level-owned camera and current input.
+ * @pre `level` is loaded and owns an initialized camera.
  * @pre `input` is the input manager used by actors in this level.
  */
-void unsigned_level_tick(ULevel *level, struct UInputManager *input, const struct UViewport *viewport);
+void unsigned_level_tick(ULevel *level, struct UInputManager *input);
 
 /** Run the definition unload hook, clear gameplay/pools/collision and detach the loaded definition. */
 void unsigned_level_unload(ULevel *level);

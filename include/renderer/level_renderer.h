@@ -42,7 +42,7 @@ void unsigned_renderer_level_init(ULevelRenderer *renderer);
  * Culling, actor allocation, relocation detection, effect sampling and background upload planning
  * all happen here during active display.
  */
-void unsigned_renderer_level_build(ULevelRenderer *renderer, ULevel *level, const UViewport *viewport);
+void unsigned_renderer_level_build(ULevelRenderer *renderer, ULevel *level);
 
 /**
  * Commit the previously built frame in critical/high/normal priority order.

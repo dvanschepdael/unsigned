@@ -9,7 +9,7 @@
 #include "display/effect/effect_compose.h"
 #include "display/sprite/limits.h"
 #include "display/sprite/scale.h"
-#include "display/viewport/viewport_internal.h"
+#include "display/camera/camera_internal.h"
 #include "system/sprite_backend.h"
 
 static void sprite_renderer_hide(USprite *sprite);
@@ -146,13 +146,13 @@ static void sprite_renderer_flush_chained_transform(USprite *sprite, s16 screen_
 }
 
 /** Common gameplay path: neither owner has a presentation effect to sample. */
-static bool sprite_renderer_uses_identity_effects(const USprite *sprite, const UViewport *viewport) {
-    return sprite->effect.function == NULL && viewport->effect.function == NULL;
+static bool sprite_renderer_uses_identity_effects(const USprite *sprite, const UCamera *camera) {
+    return sprite->effect.function == NULL && camera->effect.function == NULL;
 }
 
 /**
  * Mirror flags affect SCB1 tile order/attributes, so update cached effect state before
- * graphics are flushed. Sprite effects are presentation-only: viewport samples never
+ * graphics are flushed. Sprite effects are presentation-only: camera samples never
  * alter sprite mirroring or visibility.
  */
 static void sprite_renderer_update_effect_flags(USprite *sprite, const UEffectSample *sprite_effect) {
@@ -210,14 +210,14 @@ static Vec2 sprite_renderer_scale_pivot_offset(const USprite *sprite, const UEff
  * owned. The first sprite sample was already evaluated by the caller for visibility/flip policy
  * and is reused for column zero so custom callbacks run exactly once per column during preparation.
  */
-static void sprite_renderer_build_effect_columns(USprite *sprite, const UViewport *viewport, s16 screen_x, s16 screen_y, UEffectSample first_sprite_sample, USpriteColumnPlanBuffer *column_buffer) {
+static void sprite_renderer_build_effect_columns(USprite *sprite, const UCamera *camera, s16 screen_x, s16 screen_y, UEffectSample first_sprite_sample, USpriteColumnPlanBuffer *column_buffer) {
     USpriteRenderState *render = &sprite->render;
     const u8 sprite_count = render->layout.sprite_count;
     /* The frame planner owns enough scratch for every per-column actor sprite prepared this frame. */
     UPreparedColumn *columns = &column_buffer->columns[column_buffer->used];
-    const bool viewport_uniform = !unsigned_effect_is_per_column(&viewport->effect);
+    const bool camera_uniform = !unsigned_effect_is_per_column(&camera->effect);
     const bool sprite_uniform = !unsigned_effect_is_per_column(&sprite->effect);
-    const UEffectSample uniform_viewport = viewport_uniform ? unsigned_effect_sample(&viewport->effect, 0u, sprite_count) : unsigned_effect_identity_sample();
+    const UEffectSample uniform_camera = camera_uniform ? unsigned_effect_sample(&camera->effect, 0u, sprite_count) : unsigned_effect_identity_sample();
     const u8 base_shrink_x = render->shrink_x;
     const u16 base_column_width = (u16)base_shrink_x + 1u;
     const u16 base_width = unsigned_sprite_scaled_width_pixels(sprite_count, base_shrink_x);
@@ -240,10 +240,10 @@ static void sprite_renderer_build_effect_columns(USprite *sprite, const UViewpor
     s32 column_x = screen_x;
 
     for (u8 column = 0u; column < sprite_count; ++column) {
-        const UEffectSample viewport_sample = viewport_uniform ? uniform_viewport : unsigned_effect_sample(&viewport->effect, column, sprite_count);
+        const UEffectSample camera_sample = camera_uniform ? uniform_camera : unsigned_effect_sample(&camera->effect, column, sprite_count);
         const UEffectSample local_sprite = sprite_uniform || column == 0u ? first_sprite_sample : unsigned_effect_sample(&sprite->effect, column, sprite_count);
         UEffectSample composed;
-        unsigned_effect_compose(&composed, &viewport_sample, &local_sprite);
+        unsigned_effect_compose(&composed, &camera_sample, &local_sprite);
         s16 pivot_x = uniform_pivot_x;
         s16 pivot_y = uniform_pivot_y;
 
@@ -272,20 +272,20 @@ static void sprite_renderer_build_effect_columns(USprite *sprite, const UViewpor
  * graphics and already-computed SCB values. Per-column effects are frozen into caller-owned frame
  * scratch; capacity is a renderer composition contract, so VBlank never falls back to live sampling.
  */
-static void sprite_renderer_build_visible_draw(USprite *sprite, const UViewport *viewport, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer) {
+static void sprite_renderer_build_visible_draw(USprite *sprite, const UCamera *camera, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer) {
     USpriteRenderState *render = &sprite->render;
     const s32 world_x = (s32)position->x + sprite->offset.x;
     const s32 world_y = (s32)position->y + sprite->offset.y;
     const Vec2 screen = {
-        .x = unsigned_viewport_world_to_screen_x_unchecked(viewport, world_x),
-        .y = unsigned_viewport_world_to_screen_y_unchecked(viewport, world_y),
+        .x = unsigned_camera_world_to_screen_x_unchecked(camera, world_x),
+        .y = unsigned_camera_world_to_screen_y_unchecked(camera, world_y),
     };
     const s16 screen_x = screen.x;
     const s16 screen_y = screen.y;
 
     render->prepared.valid = false;
     render->prepared.columns = NULL;
-    if (sprite_renderer_uses_identity_effects(sprite, viewport)) {
+    if (sprite_renderer_uses_identity_effects(sprite, camera)) {
         const u16 scb2 = (u16)(((u16)render->shrink_x << 8u) | render->shrink_y);
 
         /* Dominant stable-state fast path. Camera scrolling changes only screen X for stationary
@@ -328,7 +328,7 @@ static void sprite_renderer_build_visible_draw(USprite *sprite, const UViewport 
     render->prepared.screen_y = screen_y;
     const UEffectSample sprite_effect = unsigned_effect_sample(&sprite->effect, 0u, render->layout.sprite_count);
     render->prepared.hidden = (sprite_effect.flags & U_EFFECT_SAMPLE_HIDDEN) != 0u;
-    render->prepared.per_column = unsigned_effect_is_per_column(&sprite->effect) || unsigned_effect_is_per_column(&viewport->effect);
+    render->prepared.per_column = unsigned_effect_is_per_column(&sprite->effect) || unsigned_effect_is_per_column(&camera->effect);
 
     sprite_renderer_update_effect_flags(sprite, &sprite_effect);
 
@@ -341,14 +341,14 @@ static void sprite_renderer_build_visible_draw(USprite *sprite, const UViewport 
         /* Arbitrary per-column effects may shrink one or more columns. Keep the
          * conservative guard, but reuse padding already known safe for this range. */
         sprite_renderer_update_padding(sprite, true);
-        sprite_renderer_build_effect_columns(sprite, viewport, screen_x, screen_y, sprite_effect, column_buffer);
+        sprite_renderer_build_effect_columns(sprite, camera, screen_x, screen_y, sprite_effect, column_buffer);
         render->prepared.valid = true;
         return;
     }
 
-    const UEffectSample viewport_effect = unsigned_effect_sample(&viewport->effect, 0u, render->layout.sprite_count);
+    const UEffectSample camera_effect = unsigned_effect_sample(&camera->effect, 0u, render->layout.sprite_count);
     UEffectSample composed;
-    unsigned_effect_compose(&composed, &viewport_effect, &sprite_effect);
+    unsigned_effect_compose(&composed, &camera_effect, &sprite_effect);
     const Vec2 pivot = sprite_renderer_scale_pivot_offset(sprite, &sprite_effect);
     const s16 draw_x = (s16)((s32)screen_x + composed.offset_x + pivot.x);
     const s16 draw_y = (s16)((s32)screen_y + composed.offset_y + pivot.y);
@@ -410,7 +410,7 @@ static void sprite_renderer_commit_draw(USprite *sprite) {
     render->prepared.valid = false;
 }
 
-void unsigned_renderer_sprite_build_draw(USprite *sprite, const UViewport *viewport, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer) {
+void unsigned_renderer_sprite_build_draw(USprite *sprite, const UCamera *camera, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer) {
     if (!sprite->render.layout.assigned) {
         sprite->render.prepared.columns = NULL;
         sprite->render.prepared.valid = false;
@@ -433,7 +433,7 @@ void unsigned_renderer_sprite_build_draw(USprite *sprite, const UViewport *viewp
         return;
     }
 
-    sprite_renderer_build_visible_draw(sprite, viewport, position, column_buffer);
+    sprite_renderer_build_visible_draw(sprite, camera, position, column_buffer);
 }
 
 u8 unsigned_renderer_sprite_driver_dirty(const USprite *sprite) {
@@ -472,27 +472,27 @@ void unsigned_renderer_sprite_clear_range(u16 first_sprite, u16 sprite_count) {
 }
 
 /**
- * Test world-space visibility including conservative displacement from viewport and
+ * Test world-space visibility including conservative displacement from camera and
  * sprite effects. Scale-only effects cannot enlarge beyond source size on Neo Geo,
  * so the unscaled sprite rectangle remains a conservative culling extent.
  */
-bool unsigned_renderer_sprite_is_visible(const USprite *sprite, const UViewport *viewport, const UViewportWorldBounds *bounds, const Vec2 *position) {
-    UEffectBounds viewport_bounds = {0};
+bool unsigned_renderer_sprite_is_visible(const USprite *sprite, const UCamera *camera, const UCameraWorldBounds *bounds, const Vec2 *position) {
+    UEffectBounds camera_bounds = {0};
     UEffectBounds sprite_bounds = {0};
 
     const s32 world_x = (s32)position->x + sprite->offset.x;
     const s32 world_y = (s32)position->y + sprite->offset.y;
 
-    if (sprite_renderer_uses_identity_effects(sprite, viewport)) {
-        return unsigned_viewport_world_bounds_intersects_unchecked(bounds, world_x, world_y, (s32)sprite->definition->width_tiles * 16, (s32)sprite->definition->height_tiles * 16, 0, 0);
+    if (sprite_renderer_uses_identity_effects(sprite, camera)) {
+        return unsigned_camera_world_bounds_intersects_unchecked(bounds, world_x, world_y, (s32)sprite->definition->width_tiles * 16, (s32)sprite->definition->height_tiles * 16, 0, 0);
     }
 
-    if (!unsigned_effect_get_bounds(&viewport->effect, sprite->render.layout.sprite_count, &viewport_bounds) || !unsigned_effect_get_bounds(&sprite->effect, sprite->render.layout.sprite_count, &sprite_bounds)) {
+    if (!unsigned_effect_get_bounds(&camera->effect, sprite->render.layout.sprite_count, &camera_bounds) || !unsigned_effect_get_bounds(&sprite->effect, sprite->render.layout.sprite_count, &sprite_bounds)) {
         return true;
     }
 
-    const UEffectBounds effect_bounds = unsigned_effect_add_bounds(viewport_bounds, sprite_bounds);
-    return unsigned_viewport_world_bounds_intersects_unchecked(bounds, world_x, world_y, (s32)sprite->definition->width_tiles * 16, (s32)sprite->definition->height_tiles * 16, effect_bounds.offset_x, effect_bounds.offset_y);
+    const UEffectBounds effect_bounds = unsigned_effect_add_bounds(camera_bounds, sprite_bounds);
+    return unsigned_camera_world_bounds_intersects_unchecked(bounds, world_x, world_y, (s32)sprite->definition->width_tiles * 16, (s32)sprite->definition->height_tiles * 16, effect_bounds.offset_x, effect_bounds.offset_y);
 }
 
 void unsigned_renderer_sprite_break_chain(USprite *sprite) {

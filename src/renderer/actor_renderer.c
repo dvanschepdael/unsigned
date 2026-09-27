@@ -12,13 +12,13 @@
 #include "system/sprite_backend.h"
 
 /** Scan one configured sprite, cache visibility and accumulate its hardware span. */
-static void actor_scan_sprite(USprite *sprite, const UViewport *viewport, const UViewportWorldBounds *bounds, const Vec2 *position, u16 *total, u16 *minimum, bool reserve_hidden) {
+static void actor_scan_sprite(USprite *sprite, const UCamera *camera, const UCameraWorldBounds *bounds, const Vec2 *position, u16 *total, u16 *minimum, bool reserve_hidden) {
     sprite->render.layout.visible = false;
     if (sprite->render.layout.first_sprite < *minimum) {
         *minimum = sprite->render.layout.first_sprite;
     }
 
-    if (unsigned_renderer_sprite_is_visible(sprite, viewport, bounds, position)) {
+    if (unsigned_renderer_sprite_is_visible(sprite, camera, bounds, position)) {
         sprite->render.layout.visible = true;
     }
 
@@ -144,12 +144,12 @@ static void actor_renderer_reuse_relocated_state(UActorContainer *actors) {
     }
 }
 
-void unsigned_renderer_actor_scan(UActorContainer *actors, const UViewport *viewport, u16 *sprite_count, u16 *min_first_sprite, bool reserve_hidden) {
+void unsigned_renderer_actor_scan(UActorContainer *actors, const UCamera *camera, u16 *sprite_count, u16 *min_first_sprite, bool reserve_hidden) {
     u16 total = 0u;
     u16 minimum = UINT16_MAX;
-    UViewportWorldBounds bounds;
+    UCameraWorldBounds bounds;
 
-    unsigned_viewport_world_bounds(viewport, &bounds);
+    unsigned_camera_world_bounds(camera, &bounds);
 
     for (u8 i = 0u; i < actors->count; ++i) {
         UActor *actor = actors->instances[i];
@@ -162,9 +162,9 @@ void unsigned_renderer_actor_scan(UActorContainer *actors, const UViewport *view
 
         /* Underlays are scanned first so their hardware indices remain behind the actor. */
         if (underlay != NULL) {
-            actor_scan_sprite(underlay, viewport, &bounds, &actor->position, &total, &minimum, reserve_hidden);
+            actor_scan_sprite(underlay, camera, &bounds, &actor->position, &total, &minimum, reserve_hidden);
         }
-        actor_scan_sprite(&actor->sprite, viewport, &bounds, &actor->position, &total, &minimum, reserve_hidden);
+        actor_scan_sprite(&actor->sprite, camera, &bounds, &actor->position, &total, &minimum, reserve_hidden);
     }
 
     *sprite_count = total;
@@ -241,7 +241,7 @@ static inline void actor_renderer_plan_sprite(const USprite *sprite, UActorRende
     }
 }
 
-void unsigned_renderer_actor_build_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan) {
+void unsigned_renderer_actor_build_draws(UActorContainer *actors, const UCamera *camera, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan) {
     *actor_plan = (UActorRenderPlan){0};
 
     /* CPU-side preparation can process underlay + body while the actor pointer is already hot.
@@ -251,14 +251,14 @@ void unsigned_renderer_actor_build_draws(UActorContainer *actors, const UViewpor
         USprite *underlay = actor->underlay;
 
         if (underlay != NULL) {
-            unsigned_renderer_sprite_build_draw(underlay, viewport, &actor->position, column_buffer);
+            unsigned_renderer_sprite_build_draw(underlay, camera, &actor->position, column_buffer);
             if (underlay->render.prepared.valid) {
                 unsigned_render_plan_mark_work(plan);
                 actor_renderer_plan_sprite(underlay, actor_plan);
             }
         }
 
-        unsigned_renderer_sprite_build_draw(&actor->sprite, viewport, &actor->position, column_buffer);
+        unsigned_renderer_sprite_build_draw(&actor->sprite, camera, &actor->position, column_buffer);
         if (actor->sprite.render.prepared.valid) {
             unsigned_render_plan_mark_work(plan);
             actor_renderer_plan_sprite(&actor->sprite, actor_plan);

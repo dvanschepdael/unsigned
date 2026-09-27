@@ -52,7 +52,7 @@ engine/
 ├── audio/       events, music, resolution and logical audio commands
 ├── collision/   actor index, hit detection, projectiles, gameplay collision
 ├── core/        types, math, pools, state graph, timers, TLSS
-├── display/     camera, presentation effects, sprites, text, UI and viewport
+├── display/     camera, presentation effects, sprites, text and UI
 ├── game/        UGameInstance composition root
 ├── gameplay/    attributes, tags, abilities, effects, cues and runtime
 ├── input/       generic input state
@@ -75,12 +75,11 @@ engine/core/
 
 engine/display/
 ├── camera/
-├── effect/      generic effects shared by viewports and sprites
+├── effect/      generic effects shared by cameras and sprites
 ├── sprite/
 ├── text/
 ├── ui/
 │   └── widget/
-└── viewport/
 
 engine/level/
 └── background/
@@ -119,17 +118,15 @@ src/
 - level;
 - level renderer;
 - level manager;
-- viewport.
 
 `unsigned_game_init()` essentially follows this order:
 
 1. derive the collision-manager capacities from the authored actor-pool capacities;
 2. reset the runtime and initialize the level renderer;
 3. wire fixed actor pools and the gameplay runtime;
-4. wire the level runtime to caller-owned spawn/collision/actor storage;
+4. wire the level runtime to caller-owned spawn/collision/actor storage and initialize its camera projection;
 5. initialize input, audio and timers;
-6. initialize the viewport;
-7. initialize level flow either in graph mode (`ULevelGraph`) or direct mode (`initial_level`).
+6. initialize level flow either in graph mode (`ULevelGraph`) or direct mode (`initial_level`).
 
 Variable-capacity memory is provided by the application through `UGameInstanceStorage`. The engine does not own or allocate these arrays. Configuration is trusted authored data: capacities, storage and mutually exclusive level-flow choices are construction contracts documented in `engine/game/game.h`, not defensive branches repeated during initialization.
 
@@ -198,7 +195,7 @@ unsigned_demo_loop_commit_render
 1. ticks timers;
 2. ticks the level manager;
 3. if a level is active: ticks the level;
-4. ticks the viewport;
+4. ticks the active level camera effect;
 5. ticks audio.
 
 Level rendering is split between `unsigned_game_render_build()` during active display and the commit performed by `unsigned_game_commit_render()` immediately after VBlank. The build call is a frame precondition for the commit; `unsigned_game_commit_render()` does not recompute a missing plan.
@@ -395,7 +392,7 @@ The level contains separate configuration for:
 - AI;
 - collision resolution.
 
-NPCs can be classified as `ACTIVE`, `OFFSCREEN` or `DORMANT`. `engine/level/level_ai.c` selects their activity from the viewport, then `engine/actor/npc_ai.c` applies the matching TLSS cadence.
+NPCs can be classified as `ACTIVE`, `OFFSCREEN` or `DORMANT`. `engine/level/level_ai.c` selects their activity from the camera, then `engine/actor/npc_ai.c` applies the matching TLSS cadence.
 
 Collision also uses TLSS when resolving hits/projectiles. A newly active hitbox can force immediate resolution so its first active frame is not lost.
 
@@ -450,16 +447,15 @@ Contains backend-independent presentation structures and behavior:
 - sprite and render state;
 - text;
 - UI;
-- viewport.
 
 
-`UCamera` does not know about players or levels: it owns only its world-space position, previous position and bounds. `UViewport` remains the world/screen conversion boundary and centralizes visible-rectangle intersection tests. Beat'Em Up follow policy lives in `engine/level/level_camera.c`: it aggregates active players, applies the dead zone, optional backtracking, level limits and multiplayer screen constraints.
+`UCamera` is the single view abstraction. It owns the world-space origin, previous origin, screen rectangle, movement limits and presentation effect. It is the world/screen conversion boundary and centralizes visible-world intersection tests. Beat'Em Up follow policy remains in `engine/level/level_camera.c`: it aggregates active players, then applies either the legacy dead-zone policy or cooperative centered tracking. In cooperative centered tracking, horizontal scrolling is gated by the screen center: the camera moves right only when every active player is in the right half and moves left only when every active player is in the left half (when backtracking is enabled). The trailing player is brought to the center line, so one fast player cannot drag the camera away from the group. Camera-origin limits still win at world edges, and multiplayer screen constraints run after the follow result.
 
-`UCameraBounds` can be overridden at runtime with `unsigned_level_camera_set_bounds()` and restored with `unsigned_level_camera_reset_bounds()`, providing the primitive needed for arena locks without adding event logic to the camera itself.
+`UCameraLimits` can be overridden at runtime with `unsigned_level_camera_set_limits()` and restored with `unsigned_level_camera_reset_limits()`, providing the primitive needed for arena locks without adding event logic to the camera itself. `UCameraWorldBounds` is a derived visible-world rectangle used for culling; it is not a movement constraint.
 
 Generic UI lives in `engine/display/ui/`. Reusable widgets live in `engine/display/ui/widget/`, for example `engine/display/ui/widget/progress_bar.c`.
 
-Visual effects are centralized in `engine/display/effect/`: `effect.[ch]` defines sampling/composition and `effects.[ch]` groups the built-in presets. The same `UEffect` can be owned by `UViewport.effect` or `USprite.effect`. An object has one local effect slot; the renderer then composes the viewport effect with the sprite effect. Built-in presets cover static transform, zoom, pseudo-3D turn, shake, bob, blink, shear and wave. Their configuration is non-owning and must outlive the binding. Gameplay configures an effect; it does not manipulate SCBs or Neo Geo shrink units.
+Visual effects are centralized in `engine/display/effect/`: `effect.[ch]` defines sampling/composition and `effects.[ch]` groups the built-in presets. The same `UEffect` can be owned by `UCamera.effect` or `USprite.effect`. An object has one local effect slot; the renderer then composes the camera effect with the sprite effect. Built-in presets cover static transform, zoom, pseudo-3D turn, shake, bob, blink, shear and wave. Their configuration is non-owning and must outlive the binding. Gameplay configures an effect; it does not manipulate SCBs or Neo Geo shrink units.
 
 ### `engine/renderer`
 
@@ -497,7 +493,7 @@ The renderer/system boundary is split by responsibility: `engine/system/renderer
 
 `engine/level/background/background.c` now derives parallax from the camera's absolute X position; it no longer follows a player or another gameplay actor directly. `engine/renderer/background_renderer.c` then treats backgrounds as reusable strips of hardware sprites. The cache avoids rewriting the entire screen for a simple scroll.
 
-`engine/renderer/sprite_renderer.c` uses sprite dirty state so only modified parts are pushed to the backend: graphics, position, scale/shrink, flips and layout. It composes the viewport effect with the sprite-local effect, applies pivots, and chooses between the compact hardware chain and per-column rendering when required.
+`engine/renderer/sprite_renderer.c` uses sprite dirty state so only modified parts are pushed to the backend: graphics, position, scale/shrink, flips and layout. It composes the camera effect with the sprite-local effect, applies pivots, and chooses between the compact hardware chain and per-column rendering when required.
 
 `USpriteRenderState` mirrors this lifecycle explicitly: `layout` owns the assigned hardware range, `committed` mirrors the last state written to hardware, `previous` keeps the ownership snapshot needed across relocation, and `prepared` freezes CPU-side transform data between active-display preparation and VBlank commit. Dirty bits remain a compact top-level mask. This separation is structural only; it adds no runtime dispatch or allocation.
 

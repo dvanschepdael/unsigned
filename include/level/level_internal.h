@@ -45,13 +45,11 @@ void unsigned_level_actor_build_view(ULevel *level);
 void unsigned_level_actor_tick(ULevel *level, UInputManager *input);
 
 /**
- * @brief Updates NPC activity classes from viewport visibility and runs AI according to each NPC TLSS cadence.
+ * @brief Updates NPC activity classes from the level camera and runs AI according to each NPC TLSS cadence.
  *
- * @param level Loaded level containing the NPC pool.
- * @param viewport Current viewport used for active/off-screen classification.
- * @pre `level` and `viewport` are valid and the viewport owns a valid camera.
+ * @param level Loaded level containing the NPC pool and initialized camera.
  */
-void unsigned_level_ai_tick(ULevel *level, const UViewport *viewport);
+void unsigned_level_ai_tick(ULevel *level);
 
 /**
  * @brief Instantiates NPC and object declarations from a level definition into the configured fixed pools.

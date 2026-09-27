@@ -7,7 +7,7 @@
 #define UNSIGNED_RENDERER_ACTOR_RENDERER_H
 
 #include "actor/actor.h"
-#include "display/viewport/viewport.h"
+#include "display/camera/camera.h"
 #include "renderer/render_plan.h"
 #include "renderer/sprite_column_plan.h"
 
@@ -25,12 +25,12 @@ typedef struct UActorRenderPlan {
  * Cache actor visibility and compute the hardware-sprite span required by the batch.
  *
  * @param reserve_hidden When true, active hidden sprites keep their hardware range so depth-only
- *        reorders can reuse stable ownership without viewport-driven relocations.
- * @pre `actors`, its storage, `viewport`, `sprite_count` and `min_first_sprite` are valid.
+ *        reorders can reuse stable ownership without camera-driven relocations.
+ * @pre `actors`, its storage, `camera`, `sprite_count` and `min_first_sprite` are valid.
  * @pre Every entry in the actor view is active and every body/non-NULL underlay owns an initialized sprite/current frame.
  * @pre The authored batch fits the Neo Geo actor sprite range.
  */
-void unsigned_renderer_actor_scan(UActorContainer *actors, const UViewport *viewport, u16 *sprite_count, u16 *min_first_sprite, bool reserve_hidden);
+void unsigned_renderer_actor_scan(UActorContainer *actors, const UCamera *camera, u16 *sprite_count, u16 *min_first_sprite, bool reserve_hidden);
 
 /**
  * Allocate the scanned actor batch from `first_sprite`.
@@ -40,7 +40,7 @@ void unsigned_renderer_actor_scan(UActorContainer *actors, const UViewport *view
 void unsigned_renderer_actor_layout_ready(UActorContainer *actors, u16 first_sprite, bool reserve_hidden);
 
 /** Build CPU-only transform/effect draw data for every sprite in the actor batch. */
-void unsigned_renderer_actor_build_draws(UActorContainer *actors, const UViewport *viewport, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan);
+void unsigned_renderer_actor_build_draws(UActorContainer *actors, const UCamera *camera, URenderPlan *plan, USpriteColumnPlanBuffer *column_buffer, UActorRenderPlan *actor_plan);
 
 /** Force every visible staged sprite to rebuild all hardware state on the next commit. */
 void unsigned_renderer_actor_force_rebuild(UActorContainer *actors);

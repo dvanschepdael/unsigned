@@ -15,7 +15,7 @@
 #include "collision/actor_index.h"
 #include "collision/hit_detection.h"
 #include "core/tlss/tlss.h"
-#include "display/viewport/viewport.h"
+#include "display/camera/camera.h"
 #include "gameplay/gameplay_runtime.h"
 #include "level/background/background.h"
 #include "level/level_definition.h"

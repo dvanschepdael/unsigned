@@ -9,7 +9,7 @@
 #include "level/background/background.h"
 #include "renderer/prepared_column.h"
 
-/** Encode the default background shrink plus an optional viewport zoom effect. */
+/** Encode the default background shrink plus an optional camera zoom effect. */
 u16 unsigned_system_background_encode_scb2(s16 zoom_offset);
 
 /** Encode one complete prepared background SCB2/SCB3/SCB4 transform before VBlank. @pre `column` is valid. */

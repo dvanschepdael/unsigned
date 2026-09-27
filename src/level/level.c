@@ -46,6 +46,7 @@ void unsigned_level_init(ULevel *level, const ULevelRuntimeConfig *config) {
     };
     unsigned_actor_container_init(&level->actors, config->actor_instances);
     unsigned_physics_collision_init(&level->collision.manager, config->collision_config, config->collision_layer_boxes);
+    unsigned_camera_init(&level->camera, &config->camera);
 }
 
 void unsigned_level_set_tlss_config(ULevel *level, const UTLSSScaleConfig *tlss_config) {
@@ -79,13 +80,13 @@ void unsigned_level_load(ULevel *level, const ULevelDefinition *definition, void
 }
 
 /** Advances the loaded level by one scheduled engine frame. */
-void unsigned_level_tick(ULevel *level, UInputManager *input, const UViewport *viewport) {
+void unsigned_level_tick(ULevel *level, UInputManager *input) {
     unsigned_tlss_begin_frame(&level->tlss);
 
     unsigned_level_actor_tick(level, input);
-    unsigned_level_ai_tick(level, viewport);
+    unsigned_level_ai_tick(level);
     unsigned_gameplay_ability_pool_tick(&level->gameplay->abilities);
-    unsigned_level_camera_tick(level, viewport);
+    unsigned_level_camera_tick(level);
 
     /* Build/order the actor view once as shared frame data. Collision and rendering consume the
      * same stable ordering rather than maintaining their own copies. */

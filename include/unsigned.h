@@ -49,6 +49,7 @@
 #include <core/tlss/tlss.h>
 #include <core/types.h>
 #include <display/camera/camera.h>
+#include <display/camera/camera_internal.h>
 #include <display/effect/blink.h>
 #include <display/effect/bob.h>
 #include <display/effect/effect.h>
@@ -87,8 +88,6 @@
 #include <display/ui/widget/panel.h>
 #include <display/ui/widget/progress_bar.h>
 #include <display/ui/widget/selector.h>
-#include <display/viewport/viewport.h>
-#include <display/viewport/viewport_internal.h>
 #include <game/game.h>
 #include <game/game_config.h>
 #include <game/game_internal.h>

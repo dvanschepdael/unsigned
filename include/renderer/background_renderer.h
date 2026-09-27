@@ -6,7 +6,7 @@
 #ifndef UNSIGNED_RENDERER_BACKGROUND_RENDERER_H
 #define UNSIGNED_RENDERER_BACKGROUND_RENDERER_H
 
-#include "display/viewport/viewport.h"
+#include "display/camera/camera.h"
 #include "level/background/background.h"
 #include "renderer/prepared_column.h"
 #include "renderer/render_plan.h"
@@ -68,7 +68,7 @@ typedef struct UBackgroundRenderPlan {
 void unsigned_renderer_background_init(UBackgroundRenderState *state);
 
 /** Build all background upload/transform commands on the CPU without touching VRAM. */
-void unsigned_renderer_background_build(const UBackgroundRenderState *state, const UBackground *background, const UViewport *viewport, UBackgroundRenderPlan *plan, URenderPlan *frame_plan);
+void unsigned_renderer_background_build(const UBackgroundRenderState *state, const UBackground *background, const UCamera *camera, UBackgroundRenderPlan *plan, URenderPlan *frame_plan);
 
 /** Commit a previously prepared background plan and publish its next hardware mirror state. */
 void unsigned_renderer_background_commit(UBackgroundRenderState *state, const UBackgroundRenderPlan *plan);

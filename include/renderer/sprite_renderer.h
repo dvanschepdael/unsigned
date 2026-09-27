@@ -7,7 +7,7 @@
 #define UNSIGNED_RENDERER_SPRITE_RENDERER_H
 
 #include "display/sprite/sprite.h"
-#include "display/viewport/viewport.h"
+#include "display/camera/camera.h"
 #include "renderer/sprite_column_plan.h"
 
 /** Relocate to a new contiguous hardware range without clearing the old range; the owning batch clears only slots that become unused. */
@@ -20,14 +20,14 @@ void unsigned_renderer_sprite_relocate(USprite *sprite, u16 first_sprite);
 void unsigned_renderer_sprite_break_chain(USprite *sprite);
 
 /** Same visibility test using camera bounds already computed by the owning batch renderer. */
-bool unsigned_renderer_sprite_is_visible(const USprite *sprite, const UViewport *viewport, const UViewportWorldBounds *bounds, const Vec2 *position);
+bool unsigned_renderer_sprite_is_visible(const USprite *sprite, const UCamera *camera, const UCameraWorldBounds *bounds, const Vec2 *position);
 
 /**
  * Build one allocated sprite draw entirely on the CPU, freezing per-column effects into frame scratch.
- * @pre `sprite` is initialized and owns a current frame; `viewport`, `position` and `column_buffer` are valid.
+ * @pre `sprite` is initialized and owns a current frame; `camera`, `position` and `column_buffer` are valid.
  * @pre `column_buffer` has room for every column required by this sprite when a per-column effect is active.
  */
-void unsigned_renderer_sprite_build_draw(USprite *sprite, const UViewport *viewport, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer);
+void unsigned_renderer_sprite_build_draw(USprite *sprite, const UCamera *camera, const Vec2 *position, USpriteColumnPlanBuffer *column_buffer);
 
 /**
  * @brief Commit a sprite whose visibility, transforms and optional per-column effects were prepared before VBlank.

@@ -13,7 +13,7 @@
 typedef enum UNpcActivity {
     /** Near enough to gameplay to use the normal AI cadence. */
     U_NPC_ACTIVITY_ACTIVE = 0,
-    /** Outside the active viewport region; eligible for a reduced AI cadence. */
+    /** Outside the active camera region; eligible for a reduced AI cadence. */
     U_NPC_ACTIVITY_OFFSCREEN,
     /** Explicitly sleeping until game logic promotes it; lowest-priority simulation class. */
     U_NPC_ACTIVITY_DORMANT,

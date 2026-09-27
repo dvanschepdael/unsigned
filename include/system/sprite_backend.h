@@ -9,7 +9,7 @@
 #include "display/sprite/sprite.h"
 #include "renderer/prepared_column.h"
 
-/** Encode Neo Geo SCB2 shrink values for a sprite plus an optional viewport zoom effect. */
+/** Encode Neo Geo SCB2 shrink values for a sprite plus an optional camera zoom effect. */
 /**
  * @brief Encodes the final SCB2 shrink word from prepared sprite/effect state.
  * @pre `render` and `effect` are valid prepared frame data.

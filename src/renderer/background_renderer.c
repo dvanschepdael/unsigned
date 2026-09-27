@@ -41,8 +41,8 @@ static s32 background_renderer_source_start(const UBackgroundLayer *layer, u8 *p
     return background_renderer_floor_div_16(pixel_scroll, pixel_offset);
 }
 
-static u8 background_renderer_column_count(const UBackgroundLayer *layer, const UViewport *viewport) {
-    u32 columns = (((u32)viewport->width + 15u) >> 4u) + 1u;
+static u8 background_renderer_column_count(const UBackgroundLayer *layer, const UCamera *camera) {
+    u32 columns = (((u32)camera->width + 15u) >> 4u) + 1u;
     if (columns > layer->definition->width_tiles) {
         columns = layer->definition->width_tiles;
     }
@@ -136,11 +136,11 @@ static void background_renderer_build_chained(UBackgroundLayerRenderState *next,
     next->chained_valid = true;
 }
 
-static void background_renderer_build_per_column(const UViewport *viewport, UBackgroundLayerRenderState *next, UBackgroundLayerRenderPlan *plan, URenderPlan *frame_plan) {
+static void background_renderer_build_per_column(const UCamera *camera, UBackgroundLayerRenderState *next, UBackgroundLayerRenderPlan *plan, URenderPlan *frame_plan) {
     plan->transform_mode = U_BACKGROUND_TRANSFORM_PLAN_PER_COLUMN;
     s32 column_x = plan->base_x;
     for (u8 column = 0u; column < plan->columns; ++column) {
-        const UEffectSample sampled = unsigned_effect_sample(&viewport->effect, column, plan->columns);
+        const UEffectSample sampled = unsigned_effect_sample(&camera->effect, column, plan->columns);
         unsigned_system_background_encode_column(&plan->effect_columns[column], sampled.zoom_offset, (s16)(column_x + sampled.offset_x), (s16)((s32)plan->y + sampled.offset_y), plan->layer->definition->height_tiles);
         column_x += 16;
     }
@@ -181,7 +181,7 @@ void unsigned_renderer_background_init(UBackgroundRenderState *state) {
     }
 }
 
-void unsigned_renderer_background_build(const UBackgroundRenderState *state, const UBackground *background, const UViewport *viewport, UBackgroundRenderPlan *plan, URenderPlan *frame_plan) {
+void unsigned_renderer_background_build(const UBackgroundRenderState *state, const UBackground *background, const UCamera *camera, UBackgroundRenderPlan *plan, URenderPlan *frame_plan) {
     background_renderer_reset_plan(plan);
 
     for (u8 i = 0u; i < UNSIGNED_BACKGROUND_MAX_LAYERS; ++i) {
@@ -201,7 +201,7 @@ void unsigned_renderer_background_build(const UBackgroundRenderState *state, con
             continue;
         }
 
-        layer_plan->columns = background_renderer_column_count(layer, viewport);
+        layer_plan->columns = background_renderer_column_count(layer, camera);
         if (layer_plan->columns == 0u) {
             continue;
         }
@@ -216,18 +216,18 @@ void unsigned_renderer_background_build(const UBackgroundRenderState *state, con
         u8 pixel_offset;
         const s32 source_start = background_renderer_source_start(layer, &pixel_offset);
         layer_plan->leftmost_slot = background_renderer_leftmost_slot(next, layer_plan->columns, source_start);
-        layer_plan->base_x = (s16)(viewport->x + layer->definition->screen_position.x - pixel_offset);
-        layer_plan->y = (s16)(viewport->y + layer->definition->screen_position.y);
+        layer_plan->base_x = (s16)(camera->screen_x + layer->definition->screen_position.x - pixel_offset);
+        layer_plan->y = (s16)(camera->screen_y + layer->definition->screen_position.y);
 
         background_renderer_build_uploads(layer, next, layer_plan, source_start, frame_plan);
 
-        if (viewport->effect.function == NULL) {
+        if (camera->effect.function == NULL) {
             background_renderer_build_chained(next, layer_plan, layer_plan->base_x, layer_plan->y, 0, frame_plan);
-        } else if (viewport->effect.layout == U_EFFECT_LAYOUT_UNIFORM) {
-            const UEffectSample effect = unsigned_effect_sample(&viewport->effect, 0u, layer_plan->columns);
+        } else if (camera->effect.layout == U_EFFECT_LAYOUT_UNIFORM) {
+            const UEffectSample effect = unsigned_effect_sample(&camera->effect, 0u, layer_plan->columns);
             background_renderer_build_chained(next, layer_plan, (s16)(layer_plan->base_x + effect.offset_x), (s16)(layer_plan->y + effect.offset_y), effect.zoom_offset, frame_plan);
         } else {
-            background_renderer_build_per_column(viewport, next, layer_plan, frame_plan);
+            background_renderer_build_per_column(camera, next, layer_plan, frame_plan);
         }
 
         next->rendered_first_sprite = layer->definition->first_sprite;

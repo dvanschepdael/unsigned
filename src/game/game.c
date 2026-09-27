@@ -38,6 +38,14 @@ static void game_instance_init_level_runtime(UGameInstance *game, const UGameIns
                                           .collision_config = collision_config,
                                           .collision_layer_boxes = config->storage.collision_layer_boxes,
                                           .actor_instances = config->storage.actors,
+                                          .camera =
+                                              {
+                                                  .position = {0, 0},
+                                                  .screen_x = 0,
+                                                  .screen_y = 0,
+                                                  .width = UNSIGNED_GAME_SCREEN_WIDTH,
+                                                  .height = UNSIGNED_GAME_SCREEN_HEIGHT,
+                                              },
                                       });
     unsigned_level_set_tlss_config(&game->level, &config->tlss);
 }
@@ -67,7 +75,6 @@ void unsigned_game_init(UGameInstance *game, const UGameInstanceConfig *config) 
     unsigned_audio_event_set_definitions(&game->audio, config->audio_events);
     unsigned_timer_pool_init(&game->timers, config->refresh_rate);
 
-    unsigned_viewport_init(&game->viewport, 0, 0, UNSIGNED_GAME_SCREEN_WIDTH, UNSIGNED_GAME_SCREEN_HEIGHT, &game->level.camera);
 
     game_instance_init_level_flow(game, config);
 }
@@ -81,14 +88,14 @@ void unsigned_game_tick(UGameInstance *game) {
 
     unsigned_level_manager_tick(&game->level_manager);
     if (game->level_manager.status == U_LEVEL_MANAGER_ACTIVE) {
-        unsigned_level_tick(&game->level, &game->input, &game->viewport);
-        unsigned_viewport_tick(&game->viewport);
+        unsigned_level_tick(&game->level, &game->input);
+        unsigned_camera_tick(&game->level.camera);
     }
     unsigned_audio_tick(&game->audio);
 }
 
 void unsigned_game_render_build(UGameInstance *game) {
-    unsigned_renderer_level_build(&game->renderer, &game->level, &game->viewport);
+    unsigned_renderer_level_build(&game->renderer, &game->level);
 }
 
 void unsigned_game_commit_render(UGameInstance *game) {

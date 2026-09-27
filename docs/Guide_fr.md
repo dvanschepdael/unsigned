@@ -6,7 +6,7 @@ Ce guide vise un développeur qui connaît les bases du C mais découvre le mote
 
 ### `UGameInstance` : la racine du moteur
 
-`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau, renderer, level manager, viewport et audio.
+`UGameInstance` (`engine/game/game.h`) regroupe les sous-systèmes génériques d'une partie : input, timers, gameplay, pools d'acteurs, niveau et sa caméra, renderer, level manager et audio.
 
 `unsigned_game_init()` reçoit des buffers déjà alloués via `UGameInstanceStorage`. Les relations capacités/stockages sont des contrats de construction authored : dimensionnez-les avec les macros de composition du projet plutôt que d'ajouter une allocation dynamique ou une récupération défensive dans les hot paths.
 
@@ -72,7 +72,7 @@ engine/
   level/      cycle de vie et orchestration d'un niveau
   physics/    collision géométrique, contraintes de mouvement, trajectoires
   collision/  collision gameplay
-  display/    données de présentation, effets, sprites, UI, viewport
+  display/    caméra, données de présentation, effets, sprites, UI
   renderer/   politique/cache de rendu
   system/     Neo Geo/BIOS/backends matériels
   audio/      logique audio
@@ -110,7 +110,7 @@ engine/system/system_runtime.c
         |      |      +--> timers
         |      |      +--> level manager
         |      |      +--> level tick
-        |      |      +--> viewport
+        |      |      +--> effet caméra
         |      |      +--> audio
         |      |
         |      +--> demo flow / stage / menu
@@ -159,6 +159,30 @@ background <- camera.x
 Cet ordre est un contrat comportemental. Déplacer une étape peut changer le gameplay, même si le code compile encore.
 
 Exemple : `resolve_hits` intervient après les abilities mais avant les effects/cues de fin de frame.
+
+### Caméras coopératives centrées
+
+`ULevelCameraDefinition.follow_mode` sélectionne la politique de suivi. `U_LEVEL_CAMERA_FOLLOW_DEAD_ZONE` conserve le comportement Beat'Em Up classique avec zone de confort. `U_LEVEL_CAMERA_FOLLOW_CENTERED` centre un joueur seul et utilise le centre de l'écran comme seuil de défilement coopératif en multijoueur.
+
+En multijoueur, la caméra reste immobile tant que les joueurs actifs occupent les deux moitiés de l'écran. Elle se déplace vers `+X` uniquement lorsque tous les joueurs actifs sont dans la moitié droite, en ramenant le joueur le plus à gauche (celui qui est en retard) sur la ligne centrale. Avec le retour arrière activé, elle se déplace vers `-X` uniquement lorsque tous les joueurs actifs sont dans la moitié gauche, en ramenant le joueur le plus à droite sur la ligne centrale. Un joueur rapide ne peut donc pas entraîner la caméra loin du reste du groupe. Les limites du monde restent prioritaires aux deux bords.
+
+```c
+static const ULevelCameraDefinition stage_camera = {
+    .start = {0, 0},
+    .limits = {
+        .min_x = 0,
+        .max_x = WORLD_RIGHT - UNSIGNED_GAME_SCREEN_WIDTH + 1,
+        .min_y = 0,
+        .max_y = 0,
+    },
+    .follow_mode = U_LEVEL_CAMERA_FOLLOW_CENTERED,
+    .follow_x = true,
+    .follow_y = false,
+    .constrain_players = true,
+};
+```
+
+Les limites de caméra décrivent les origines valides de la caméra, pas le rectangle complet du monde. Pour un bord droit inclusif, `WORLD_RIGHT - camera_width + 1` fait coïncider exactement le dernier rectangle visible avec le bord du monde. Une fois une limite atteinte, la caméra s'arrête ; les joueurs s'éloignent alors naturellement du centre vers le bord concerné.
 
 ## 5. Comprendre la mémoire fixe
 
@@ -278,7 +302,7 @@ Décrit des concepts indépendants du backend :
 - effets génériques (`UEffect`) ;
 - sprites ;
 - texte ;
-- viewport ;
+- caméra ;
 - éléments UI ;
 - widgets ;
 - layout/screen/page.
@@ -336,7 +360,7 @@ UUIProgressBar
 
 ### Appliquer un effet à n'importe quel `USprite`
 
-Les effets de présentation sont dans `engine/display/effect/` et utilisent la même abstraction `UEffect` que le viewport. Le mécanisme générique se trouve dans `engine/display/effect/effect.h`. Avec `engine/` dans le chemin d'inclusion, le code C l'inclut ainsi :
+Les effets de présentation sont dans `engine/display/effect/` et utilisent la même abstraction `UEffect` que la caméra. Le mécanisme générique se trouve dans `engine/display/effect/effect.h`. Avec `engine/` dans le chemin d'inclusion, le code C l'inclut ainsi :
 
 ```c
 #include "display/effect/effect.h"

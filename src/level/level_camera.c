@@ -7,7 +7,6 @@
 
 #include "actor/player.h"
 #include "core/math/math.h"
-#include "display/viewport/viewport.h"
 #include "level/level_runtime.h"
 #include "physics/movement.h"
 
@@ -19,23 +18,30 @@ typedef struct ULevelPlayerExtent {
 } ULevelPlayerExtent;
 
 void unsigned_level_camera_init(ULevel *level, const ULevelCameraDefinition *definition) {
+    UCamera *camera = &level->camera;
+
+    unsigned_camera_clear_limits(camera);
     if (definition == NULL) {
-        unsigned_camera_init(&level->camera, 0, 0);
+        unsigned_camera_set_position(camera, 0, 0);
+        unsigned_camera_begin_frame(camera);
         return;
     }
-    unsigned_camera_init(&level->camera, definition->start.x, definition->start.y);
-    unsigned_camera_set_bounds(&level->camera, &definition->bounds);
+
+    unsigned_camera_set_position(camera, definition->start.x, definition->start.y);
+    unsigned_camera_begin_frame(camera);
+    unsigned_camera_set_limits(camera, &definition->limits);
 }
 
-/** Apply viewport constraints to all active players without coupling actor state to the camera. */
-static void level_camera_constrain_players(ULevel *level, const UViewport *viewport) {
+/** Apply camera constraints to all active players without coupling actor state to camera internals. */
+static void level_camera_constrain_players(ULevel *level) {
     UPoolInstanceContainer *players = &level->actor_pools->players;
+    const UCamera *camera = &level->camera;
 
     const UMovementBounds bounds = {
-        .min_x = viewport->camera->x,
-        .max_x = unsigned_math_saturate_s16((s32)viewport->camera->x + viewport->width - 1),
-        .min_y = viewport->camera->y,
-        .max_y = unsigned_math_saturate_s16((s32)viewport->camera->y + viewport->height - 1),
+        .min_x = camera->x,
+        .max_x = unsigned_math_saturate_s16((s32)camera->x + camera->width - 1),
+        .min_y = camera->y,
+        .max_y = unsigned_math_saturate_s16((s32)camera->y + camera->height - 1),
     };
 
     for (u8 i = 0u; i < unsigned_pool_iteration_end(players); ++i) {
@@ -80,7 +86,7 @@ static ULevelPlayerExtent level_camera_player_extent(ULevel *level) {
 }
 
 /** Compute a camera origin that keeps the multiplayer extent inside the configured comfort zone. */
-static Vec2 level_camera_follow_position(const UCamera *camera, const ULevelCameraDefinition *definition, ULevelPlayerExtent extent) {
+static Vec2 level_camera_dead_zone_position(const UCamera *camera, const ULevelCameraDefinition *definition, ULevelPlayerExtent extent) {
     Vec2 result = {.x = camera->x, .y = camera->y};
 
     if (definition->follow_x) {
@@ -113,8 +119,51 @@ static Vec2 level_camera_follow_position(const UCamera *camera, const ULevelCame
     return result;
 }
 
-void unsigned_level_camera_tick(ULevel *level, const UViewport *viewport) {
-    unsigned_camera_begin_frame(&level->camera);
+/** Midpoint of an inclusive multiplayer extent without overflow or a target divide instruction. */
+static s16 level_camera_extent_midpoint(s16 min, s16 max) {
+    return unsigned_math_saturate_s16((s32)min + (((s32)max - min) >> 1));
+}
+
+/**
+ * Keep a solo player centered, but gate horizontal multiplayer scrolling until the whole group
+ * occupies the same screen half. The trailing player is placed on the center line, so a faster
+ * player cannot drag the camera away from the rest of the group.
+ */
+static Vec2 level_camera_centered_position(const UCamera *camera, const ULevelCameraDefinition *definition, ULevelPlayerExtent extent) {
+    Vec2 result = {.x = camera->x, .y = camera->y};
+
+    if (definition->follow_x) {
+        const s32 half_width = (s32)(camera->width >> 1);
+        const s32 center_x = (s32)camera->x + half_width;
+
+        if ((s32)extent.min_x > center_x) {
+            result.x = unsigned_math_saturate_s16((s32)extent.min_x - half_width);
+        } else if (definition->allow_backtracking_x && (s32)extent.max_x < center_x) {
+            result.x = unsigned_math_saturate_s16((s32)extent.max_x - half_width);
+        }
+    }
+
+    if (definition->follow_y) {
+        const s16 focus_y = level_camera_extent_midpoint(extent.min_y, extent.max_y);
+        const s32 half_height = (s32)(camera->height >> 1);
+        result.y = unsigned_math_saturate_s16((s32)focus_y - half_height);
+    }
+
+    return result;
+}
+
+/** Compute the camera origin using the level-authored follow policy. */
+static Vec2 level_camera_follow_position(const UCamera *camera, const ULevelCameraDefinition *definition, ULevelPlayerExtent extent) {
+    if (definition->follow_mode == U_LEVEL_CAMERA_FOLLOW_CENTERED) {
+        return level_camera_centered_position(camera, definition, extent);
+    }
+
+    return level_camera_dead_zone_position(camera, definition, extent);
+}
+
+void unsigned_level_camera_tick(ULevel *level) {
+    UCamera *camera = &level->camera;
+    unsigned_camera_begin_frame(camera);
 
     if (level->definition->camera == NULL) {
         return;
@@ -127,19 +176,19 @@ void unsigned_level_camera_tick(ULevel *level, const UViewport *viewport) {
     }
 
     const ULevelPlayerExtent extent = level_camera_player_extent(level);
-    const Vec2 position = level_camera_follow_position(&level->camera, definition, extent);
-    unsigned_camera_set_position(&level->camera, position.x, position.y);
+    const Vec2 position = level_camera_follow_position(camera, definition, extent);
+    unsigned_camera_set_position(camera, position.x, position.y);
 
     /* Camera movement can consume space behind a lagging player; keep every player visible. */
     if (definition->constrain_players) {
-        level_camera_constrain_players(level, viewport);
+        level_camera_constrain_players(level);
     }
 }
 
-void unsigned_level_camera_set_bounds(ULevel *level, const UCameraBounds *bounds) {
-    unsigned_camera_set_bounds(&level->camera, bounds);
+void unsigned_level_camera_set_limits(ULevel *level, const UCameraLimits *limits) {
+    unsigned_camera_set_limits(&level->camera, limits);
 }
 
-void unsigned_level_camera_reset_bounds(ULevel *level) {
-    unsigned_camera_set_bounds(&level->camera, &level->definition->camera->bounds);
+void unsigned_level_camera_reset_limits(ULevel *level) {
+    unsigned_camera_set_limits(&level->camera, &level->definition->camera->limits);
 }

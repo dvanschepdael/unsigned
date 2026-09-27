@@ -76,7 +76,7 @@ struct ULevelDefinition {
     /**
      * Keep hardware columns reserved for active actors even while culled.
      * This trades sprite-index space for much lower relocation/SCB1 churn as actors
-     * enter and leave the viewport.
+     * enter and leave the camera view.
      */
     bool stable_actor_sprite_ranges;
     /** Skip dynamic NPC collision while the level AI classifies an NPC as off-screen/dormant. */

@@ -52,7 +52,7 @@ engine/
 ├── audio/       événements, musique, résolution et commandes audio logiques
 ├── collision/   index d'acteurs, hit detection, projectiles, collision gameplay
 ├── core/        types, math, pools, state graph, timers, TLSS
-├── display/     caméra, effets de présentation, sprites, texte, UI et viewport
+├── display/     caméra, effets de présentation, sprites, texte et UI
 ├── game/        composition root UGameInstance
 ├── gameplay/    attributes, tags, abilities, effects, cues et runtime
 ├── input/       état d'entrée générique
@@ -75,12 +75,11 @@ engine/core/
 
 engine/display/
 ├── camera/
-├── effect/      effets génériques partagés par viewport et sprites
+├── effect/      effets génériques partagés par caméra et sprites
 ├── sprite/
 ├── text/
 ├── ui/
 │   └── widget/
-└── viewport/
 
 engine/level/
 └── background/
@@ -119,17 +118,15 @@ src/
 - niveau ;
 - level renderer ;
 - level manager ;
-- viewport.
 
 `unsigned_game_init()` suit essentiellement cet ordre :
 
 1. dériver les capacités du collision manager à partir des capacités de pools d'acteurs déclarées ;
 2. remettre le runtime à zéro et initialiser le level renderer ;
 3. câbler les pools d'acteurs fixes et le runtime gameplay ;
-4. câbler le runtime du niveau sur les stockages acteurs/spawns/collisions fournis par l'appelant ;
+4. câbler le runtime du niveau sur les stockages acteurs/spawns/collisions fournis par l'appelant et initialiser la projection de sa caméra ;
 5. initialiser l'input, l'audio et les timers ;
-6. initialiser le viewport ;
-7. initialiser le flux de niveau soit en mode graph (`ULevelGraph`), soit en mode direct (`initial_level`).
+6. initialiser le flux de niveau soit en mode graph (`ULevelGraph`), soit en mode direct (`initial_level`).
 
 La mémoire à capacité variable est fournie par l'application via `UGameInstanceStorage`. Le moteur ne possède ni n'alloue ces tableaux. La configuration est une donnée authored de confiance : capacités, stockages et choix exclusif du mode de flux sont des contrats de construction documentés dans `engine/game/game.h`, pas des validations défensives répétées pendant l'initialisation.
 
@@ -198,7 +195,7 @@ unsigned_demo_loop_commit_render
 1. tick des timers ;
 2. tick du level manager ;
 3. si le niveau est actif : tick du niveau ;
-4. tick du viewport ;
+4. tick de l'effet de la caméra du niveau actif ;
 5. tick de l'audio.
 
 Le rendu du niveau est séparé entre `unsigned_game_render_build()` pendant l'affichage actif et le commit effectué par `unsigned_game_commit_render()` juste après le VBlank. L'appel de construction est une précondition de frame pour le commit ; `unsigned_game_commit_render()` ne recalcule pas un plan manquant.
@@ -395,7 +392,7 @@ Le niveau contient une configuration séparée pour :
 - l'AI ;
 - la résolution de collision.
 
-Les NPC peuvent être classés `ACTIVE`, `OFFSCREEN` ou `DORMANT`. `engine/level/level_ai.c` choisit leur activité selon le viewport, puis `engine/actor/npc_ai.c` applique la cadence TLSS correspondante.
+Les NPC peuvent être classés `ACTIVE`, `OFFSCREEN` ou `DORMANT`. `engine/level/level_ai.c` choisit leur activité selon la caméra, puis `engine/actor/npc_ai.c` applique la cadence TLSS correspondante.
 
 La collision utilise également TLSS lors de la résolution des hits/projectiles. Une hitbox nouvellement active peut forcer une résolution immédiate afin de ne pas perdre sa première frame active.
 
@@ -450,16 +447,15 @@ Contient les structures et comportements de présentation indépendants du backe
 - sprite et état de rendu ;
 - texte ;
 - UI ;
-- viewport.
 
 
-`UCamera` ne connaît ni les joueurs ni le niveau : elle ne gère que sa position world-space, sa position précédente et ses bounds. `UViewport` reste la frontière de conversion world/screen et centralise les tests d'intersection visibles. La politique Beat'Em Up est dans `engine/level/level_camera.c` : elle agrège les joueurs actifs, applique la dead zone, le backtracking optionnel, les limites du niveau et les contraintes multijoueur.
+`UCamera` est l'unique abstraction de vue. Elle possède l'origine dans le monde, l'origine précédente, le rectangle écran, les limites de déplacement et l'effet de présentation. Elle constitue la frontière de conversion monde/écran et centralise les tests d'intersection avec le monde visible. La politique de suivi Beat'Em Up reste dans `engine/level/level_camera.c` : elle agrège les joueurs actifs puis applique soit la dead zone historique, soit un suivi centré coopératif. Avec ce suivi, le défilement horizontal est conditionné par le centre de l'écran : la caméra avance seulement lorsque tous les joueurs actifs sont dans la moitié droite et recule seulement lorsque tous sont dans la moitié gauche (si le retour arrière est autorisé). Le joueur en retard est ramené sur la ligne centrale, ce qui empêche un joueur rapide d'entraîner la caméra loin du groupe. Les limites d'origine de la caméra restent prioritaires aux bords du monde, puis les contraintes écran multijoueur sont appliquées.
 
-Les `UCameraBounds` peuvent être remplacés à runtime avec `unsigned_level_camera_set_bounds()` puis restaurés avec `unsigned_level_camera_reset_bounds()`, ce qui fournit la primitive nécessaire aux verrous d'arène sans ajouter de logique d'événement à la caméra.
+Les `UCameraLimits` peuvent être remplacées à runtime avec `unsigned_level_camera_set_limits()` puis restaurées avec `unsigned_level_camera_reset_limits()`, ce qui fournit la primitive nécessaire aux verrous d'arène sans ajouter de logique d'événement à la caméra. `UCameraWorldBounds` représente le rectangle du monde actuellement visible utilisé pour le culling ; ce ne sont pas des limites de déplacement.
 
 La UI générique est dans `engine/display/ui/`. Les widgets réutilisables sont dans `engine/display/ui/widget/`, par exemple `engine/display/ui/widget/progress_bar.c`.
 
-Les effets visuels sont centralisés dans `engine/display/effect/` : `effect.[ch]` définit le mécanisme de sampling/composition et `effects.[ch]` regroupe les presets fournis. Le même `UEffect` peut être porté par `UViewport.effect` ou `USprite.effect`. Un objet ne possède qu'un slot d'effet local ; le renderer compose ensuite l'effet du viewport avec celui du sprite. Les presets couvrent transformation statique, zoom, pseudo-rotation/turn, shake, bob, blink, shear et wave. Leur configuration est non possédée et doit vivre aussi longtemps que le binding. Le code de gameplay configure un effet ; il ne manipule ni SCB ni unités de shrink Neo Geo.
+Les effets visuels sont centralisés dans `engine/display/effect/` : `effect.[ch]` définit le mécanisme de sampling/composition et `effects.[ch]` regroupe les presets fournis. Le même `UEffect` peut être porté par `UCamera.effect` ou `USprite.effect`. Un objet ne possède qu'un slot d'effet local ; le renderer compose ensuite l'effet de la caméra avec celui du sprite. Les presets couvrent transformation statique, zoom, pseudo-rotation/turn, shake, bob, blink, shear et wave. Leur configuration est non possédée et doit vivre aussi longtemps que le binding. Le code de gameplay configure un effet ; il ne manipule ni SCB ni unités de shrink Neo Geo.
 
 ### `engine/renderer`
 
@@ -497,7 +493,7 @@ La frontière renderer/system est séparée par responsabilité : `engine/system
 
 `engine/level/background/background.c` dérive désormais son parallax de la position X absolue de la caméra ; il ne suit plus directement un joueur ou un autre acteur gameplay. `engine/renderer/background_renderer.c` traite ensuite ces backgrounds comme des bandes de sprites matériels réutilisables. Le cache évite de réécrire l'ensemble de l'écran lors d'un simple scroll.
 
-`engine/renderer/sprite_renderer.c` utilise l'état dirty du sprite pour ne pousser que les parties modifiées vers le backend : graphisme, position, scale/shrink, flips et layout. Il compose l'effet du viewport avec l'effet local du sprite, applique les pivots et choisit entre la chaîne matérielle compacte et un rendu par colonne lorsque l'effet le demande.
+`engine/renderer/sprite_renderer.c` utilise l'état dirty du sprite pour ne pousser que les parties modifiées vers le backend : graphisme, position, scale/shrink, flips et layout. Il compose l'effet de la caméra avec l'effet local du sprite, applique les pivots et choisit entre la chaîne matérielle compacte et un rendu par colonne lorsque l'effet le demande.
 
 `USpriteRenderState` reflète explicitement ce cycle de vie : `layout` possède le range matériel assigné, `committed` reflète le dernier état écrit au hardware, `previous` conserve le snapshot d'ownership nécessaire lors d'une relocation, et `prepared` fige les données de transform CPU entre la préparation pendant l'affichage actif et le commit VBlank. Les dirty bits restent un masque compact au niveau principal. Cette séparation est uniquement structurelle : elle n'ajoute ni dispatch runtime ni allocation.
 

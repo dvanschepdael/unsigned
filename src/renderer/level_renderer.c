@@ -35,12 +35,12 @@ static void level_renderer_hide_committed(ULevelRenderer *renderer) {
 /** Compute the contiguous actor hardware span selected by culling/stable-layout policy.
  * @pre Authored actor ranges fit the Neo Geo hardware range and do not overlap background ranges.
  */
-static void level_actor_render_span(ULevelRenderer *renderer, ULevel *level, const UViewport *viewport, u16 *first_sprite, u16 *sprite_count) {
+static void level_actor_render_span(ULevelRenderer *renderer, ULevel *level, const UCamera *camera, u16 *first_sprite, u16 *sprite_count) {
     u16 initial_first_sprite = UINT16_MAX;
     u16 total = 0u;
 
     const bool stable_ranges = level->definition->stable_actor_sprite_ranges;
-    unsigned_renderer_actor_scan(&level->actors, viewport, &total, &initial_first_sprite, stable_ranges);
+    unsigned_renderer_actor_scan(&level->actors, camera, &total, &initial_first_sprite, stable_ranges);
 
     if (total == 0u) {
         *first_sprite = renderer->actor_first_sprite != UINT16_MAX ? renderer->actor_first_sprite : UNSIGNED_SPRITE_FIRST;
@@ -56,14 +56,14 @@ static void level_actor_render_span(ULevelRenderer *renderer, ULevel *level, con
     *sprite_count = total;
 }
 
-static void level_layout_sorted_actors(ULevelRenderer *renderer, ULevel *level, const UViewport *viewport, u16 *first_sprite, u16 *sprite_count) {
+static void level_layout_sorted_actors(ULevelRenderer *renderer, ULevel *level, const UCamera *camera, u16 *first_sprite, u16 *sprite_count) {
     if (level->actors.count == 0u) {
         *first_sprite = renderer->actor_first_sprite != UINT16_MAX ? renderer->actor_first_sprite : UNSIGNED_SPRITE_FIRST;
         *sprite_count = 0u;
         return;
     }
 
-    level_actor_render_span(renderer, level, viewport, first_sprite, sprite_count);
+    level_actor_render_span(renderer, level, camera, first_sprite, sprite_count);
 
     const bool stable_ranges = level->definition->stable_actor_sprite_ranges;
     if (stable_ranges && renderer->rendered_definition == level->definition && renderer->rendered_actor_layout_revision == level->actors.layout_revision && renderer->rendered_actor_first_sprite == *first_sprite &&
@@ -102,8 +102,9 @@ void unsigned_renderer_level_init(ULevelRenderer *renderer) {
     unsigned_renderer_background_init(&renderer->background);
 }
 
-void unsigned_renderer_level_build(ULevelRenderer *renderer, ULevel *level, const UViewport *viewport) {
+void unsigned_renderer_level_build(ULevelRenderer *renderer, ULevel *level) {
     ULevelRenderPlan *plan;
+    const UCamera *camera = &level->camera;
 
     plan = &renderer->plan;
     /* Do not clear the 1.5 KiB nested background work arrays every frame. Their counts/modes are
@@ -126,16 +127,16 @@ void unsigned_renderer_level_build(ULevelRenderer *renderer, ULevel *level, cons
         renderer->rendered_actor_layout_revision = 0u;
     }
 
-    level_layout_sorted_actors(renderer, level, viewport, &plan->actor_first_sprite, &plan->actor_sprite_count);
+    level_layout_sorted_actors(renderer, level, camera, &plan->actor_first_sprite, &plan->actor_sprite_count);
 
     if (definition_changed) {
         /* Same hardware indices may be reused by a new stage; force a complete authoritative rewrite. */
         unsigned_renderer_actor_force_rebuild(&level->actors);
     }
     level_renderer_plan_old_actor_clear(renderer, plan);
-    unsigned_renderer_actor_build_draws(&level->actors, viewport, &plan->frame, &plan->sprite_columns, &plan->actors);
+    unsigned_renderer_actor_build_draws(&level->actors, camera, &plan->frame, &plan->sprite_columns, &plan->actors);
 
-    unsigned_renderer_background_build(&renderer->background, &level->background, viewport, &plan->background, &plan->frame);
+    unsigned_renderer_background_build(&renderer->background, &level->background, camera, &plan->background, &plan->frame);
 
 }
 

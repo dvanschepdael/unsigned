@@ -1,6 +1,6 @@
 /**
  * @file effect.h
- * @brief Generic sampled display effects shared by viewports and sprites.
+ * @brief Generic sampled display effects shared by cameras and sprites.
  */
 
 #ifndef UNSIGNED_DISPLAY_EFFECT_EFFECT_H
@@ -15,9 +15,9 @@
 
 typedef enum UEffectSampleFlag {
     U_EFFECT_SAMPLE_NONE = 0x00u,
-    /** Toggle horizontal mirroring of a sprite. Ignored by viewport/background consumers. */
+    /** Toggle horizontal mirroring of a sprite. Ignored by camera/background consumers. */
     U_EFFECT_SAMPLE_FLIP_X = 0x01u,
-    /** Toggle vertical mirroring of a sprite. Ignored by viewport/background consumers. */
+    /** Toggle vertical mirroring of a sprite. Ignored by camera/background consumers. */
     U_EFFECT_SAMPLE_FLIP_Y = 0x02u,
     /** Temporarily hide a sprite without releasing its hardware allocation. */
     U_EFFECT_SAMPLE_HIDDEN = 0x04u,
@@ -26,7 +26,7 @@ typedef enum UEffectSampleFlag {
 /**
  * One sampled presentation transform.
  *
- * Translation and `zoom_offset` are consumed by both viewport and sprite renderers.
+ * Translation and `zoom_offset` are consumed by both camera and sprite renderers.
  * `scale_*`, `pivot_*` and flags are sprite presentation fields. Scale values use Q8
  * where 256 is 100%; Neo Geo sprite presentation supports shrink only, so authored
  * scale values never exceed 100%.
@@ -35,7 +35,7 @@ typedef enum UEffectSampleFlag {
 typedef struct UEffectSample {
     s16 offset_x;
     s16 offset_y;
-    /** Legacy hardware-oriented uniform zoom delta used by viewport effects. Positive values shrink. */
+    /** Legacy hardware-oriented uniform zoom delta used by camera effects. Positive values shrink. */
     s16 zoom_offset;
     /** Q8 sprite scale: 256 = 100%, 128 = 50%. */
     u16 scale_x;

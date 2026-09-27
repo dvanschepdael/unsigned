@@ -6,7 +6,7 @@ This guide is intended for a developer who knows the basics of C but is new to t
 
 ### `UGameInstance`: the engine root
 
-`UGameInstance` (`engine/game/game.h`) groups the generic subsystems of a game session: input, timers, gameplay, actor pools, level, renderer, level manager, viewport and audio.
+`UGameInstance` (`engine/game/game.h`) groups the generic subsystems of a game session: input, timers, gameplay, actor pools, level and its camera, renderer, level manager and audio.
 
 `unsigned_game_init()` receives already allocated buffers through `UGameInstanceStorage`. Capacity/storage relationships are authored construction contracts: size them from the project composition macros instead of adding dynamic allocation or defensive hot-path recovery.
 
@@ -72,7 +72,7 @@ engine/
   level/      level lifecycle and orchestration
   physics/    geometric collision, movement constraints, trajectories
   collision/  gameplay collision
-  display/    presentation data, effects, sprites, UI, viewport
+  display/    camera, presentation data, effects, sprites, UI
   renderer/   rendering policy/cache
   system/     Neo Geo/BIOS/hardware backends
   audio/      audio logic
@@ -110,7 +110,7 @@ engine/system/system_runtime.c
         |      |      +--> timers
         |      |      +--> level manager
         |      |      +--> level tick
-        |      |      +--> viewport
+        |      |      +--> camera effect
         |      |      +--> audio
         |      |
         |      +--> demo flow / stage / menu
@@ -159,6 +159,30 @@ background <- camera.x
 This order is a behavioral contract. Moving a stage can change gameplay even if the code still compiles.
 
 Example: `resolve_hits` runs after abilities but before end-of-frame effects/cues.
+
+### Centered cooperative cameras
+
+`ULevelCameraDefinition.follow_mode` selects the follow policy. `U_LEVEL_CAMERA_FOLLOW_DEAD_ZONE` keeps the classic Beat'Em Up comfort-zone behavior. `U_LEVEL_CAMERA_FOLLOW_CENTERED` centers a solo player and uses the screen center as a cooperative scrolling gate in multiplayer.
+
+In multiplayer, the camera stays still while active players occupy both screen halves. It moves toward `+X` only when every active player is in the right half, placing the leftmost (trailing) player on the center line. With backtracking enabled, it moves toward `-X` only when every active player is in the left half, placing the rightmost player on the center line. This prevents one fast player from dragging the camera away from the group. World limits still win at either edge.
+
+```c
+static const ULevelCameraDefinition stage_camera = {
+    .start = {0, 0},
+    .limits = {
+        .min_x = 0,
+        .max_x = WORLD_RIGHT - UNSIGNED_GAME_SCREEN_WIDTH + 1,
+        .min_y = 0,
+        .max_y = 0,
+    },
+    .follow_mode = U_LEVEL_CAMERA_FOLLOW_CENTERED,
+    .follow_x = true,
+    .follow_y = false,
+    .constrain_players = true,
+};
+```
+
+The camera limits describe valid camera origins, not the complete world rectangle. For an inclusive right world edge, using `WORLD_RIGHT - camera_width + 1` makes the final camera rectangle end exactly at the world edge. When the camera reaches either limit it stops moving; players then naturally move away from screen center toward that edge.
 
 ## 5. Understanding fixed memory
 
@@ -278,7 +302,7 @@ Describes backend-independent concepts:
 - generic effects (`UEffect`);
 - sprites;
 - text;
-- viewport;
+- camera;
 - UI elements;
 - widgets;
 - layout/screen/page.
@@ -336,7 +360,7 @@ UUIProgressBar
 
 ### Applying an effect to any `USprite`
 
-Presentation effects live in `engine/display/effect/` and use the same `UEffect` abstraction as the viewport. The generic mechanism lives in `engine/display/effect/effect.h`. With `engine/` on the include path, C includes it as follows:
+Presentation effects live in `engine/display/effect/` and use the same `UEffect` abstraction as the camera. The generic mechanism lives in `engine/display/effect/effect.h`. With `engine/` on the include path, C includes it as follows:
 
 ```c
 #include "display/effect/effect.h"

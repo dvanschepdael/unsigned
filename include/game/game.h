@@ -71,7 +71,6 @@ typedef struct UGameInstance {
     ULevel level;
     ULevelRenderer renderer;
     ULevelManager level_manager;
-    UViewport viewport;
 } UGameInstance;
 
 /**
@@ -103,7 +102,7 @@ void unsigned_game_set_level(UGameInstance *game, const ULevelDefinition *defini
 
 /**
  * Advance one gameplay frame. Timers tick first, the level manager decides whether the
- * active level may tick, then actor/gameplay/viewport work runs and audio resolves last.
+ * active level may tick, then actor/gameplay/camera work runs and audio resolves last.
  */
 void unsigned_game_tick(UGameInstance *game);
 
