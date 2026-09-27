@@ -394,6 +394,8 @@ The level contains separate configuration for:
 
 NPCs can be classified as `ACTIVE`, `OFFSCREEN` or `DORMANT`. `engine/level/level_ai.c` selects their activity from the camera, then `engine/actor/npc_ai.c` applies the matching TLSS cadence.
 
+Combat NPCs may additionally use the optional Beat'Em Up policy in `npc_ai`: select a player target, reserve a tactical slot around that target, approach directly, activate an attack ability, step back, release the slot and roam before retrying. The level owns one small `UNpcAiWorld`; target generations/reservations are reconciled only when the player-pool revision changes. Passive NPCs and content with a custom `UStateGraph` retain the previous path without paying for the built-in policy. Movement and waits consume the elapsed TLSS delta so off-screen throttling reduces decision frequency without artificially slowing simulated time.
+
 Collision also uses TLSS when resolving hits/projectiles. A newly active hitbox can force immediate resolution so its first active frame is not lost.
 
 ## 10. Collision: physics versus gameplay meaning
@@ -492,6 +494,10 @@ The renderer/system boundary is split by responsibility: `engine/system/renderer
 ## 12. Backgrounds and sprites
 
 `engine/level/background/background.c` now derives parallax from the camera's absolute X position; it no longer follows a player or another gameplay actor directly. `engine/renderer/background_renderer.c` then treats backgrounds as reusable strips of hardware sprites. The cache avoids rewriting the entire screen for a simple scroll.
+
+Background source size and screen placement are deliberately separate runtime concerns. `UBackgroundLayerDefinition.width_tiles` is the repeating source period, so it may be narrower than the viewport; the renderer repeats that source through its fixed 21-column ring. `UBackgroundLayer.position` is initialized from the authored default and can be moved with `unsigned_level_background_set_layer_position()` without rebuilding the source definition. This lets levels vertically partition parallax strips and avoid unnecessary scanline overlap.
+
+The demo layout uses three packed 21-column hardware ranges (sprites 1-21, 22-42 and 43-63). Its optimized assets/placement ensure at most two background strips are active on the same scanline, reducing the background peak from 63 to 42 sprite columns and leaving 54 of the Neo Geo's 96 columns for actors.
 
 `engine/renderer/sprite_renderer.c` uses sprite dirty state so only modified parts are pushed to the backend: graphics, position, scale/shrink, flips and layout. It composes the camera effect with the sprite-local effect, applies pivots, and chooses between the compact hardware chain and per-column rendering when required.
 

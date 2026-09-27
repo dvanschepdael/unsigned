@@ -41,10 +41,10 @@ static s32 background_renderer_source_start(const UBackgroundLayer *layer, u8 *p
     return background_renderer_floor_div_16(pixel_scroll, pixel_offset);
 }
 
-static u8 background_renderer_column_count(const UBackgroundLayer *layer, const UCamera *camera) {
+static u8 background_renderer_column_count(const UCamera *camera) {
     u32 columns = (((u32)camera->width + 15u) >> 4u) + 1u;
-    if (columns > layer->definition->width_tiles) {
-        columns = layer->definition->width_tiles;
+    if (columns > UNSIGNED_BACKGROUND_RENDER_MAX_COLUMNS) {
+        columns = UNSIGNED_BACKGROUND_RENDER_MAX_COLUMNS;
     }
     return (u8)columns;
 }
@@ -201,7 +201,7 @@ void unsigned_renderer_background_build(const UBackgroundRenderState *state, con
             continue;
         }
 
-        layer_plan->columns = background_renderer_column_count(layer, camera);
+        layer_plan->columns = background_renderer_column_count(camera);
         if (layer_plan->columns == 0u) {
             continue;
         }
@@ -216,8 +216,8 @@ void unsigned_renderer_background_build(const UBackgroundRenderState *state, con
         u8 pixel_offset;
         const s32 source_start = background_renderer_source_start(layer, &pixel_offset);
         layer_plan->leftmost_slot = background_renderer_leftmost_slot(next, layer_plan->columns, source_start);
-        layer_plan->base_x = (s16)(camera->screen_x + layer->definition->screen_position.x - pixel_offset);
-        layer_plan->y = (s16)(camera->screen_y + layer->definition->screen_position.y);
+        layer_plan->base_x = (s16)(camera->screen_x + layer->position.x - pixel_offset);
+        layer_plan->y = (s16)(camera->screen_y + layer->position.y);
 
         background_renderer_build_uploads(layer, next, layer_plan, source_start, frame_plan);
 

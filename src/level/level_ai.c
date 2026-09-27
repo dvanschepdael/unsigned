@@ -40,6 +40,10 @@ void unsigned_level_ai_tick(ULevel *level) {
         return;
     }
 
+    /* Player membership changes are rare. Reconcile shared tactical reservations only when the
+     * player pool revision changes instead of rebuilding target state every frame. */
+    unsigned_actor_npc_ai_world_sync(&level->npc_ai);
+
     UCameraWorldBounds bounds;
     unsigned_camera_world_bounds(&level->camera, &bounds);
 

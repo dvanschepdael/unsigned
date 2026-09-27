@@ -106,6 +106,7 @@ void unsigned_actor_npc_tick_scheduled(UNpc *npc, const UTLSS *tlss, u16 slot) {
 }
 
 void unsigned_actor_npc_destroy(UNpc *npc) {
+    unsigned_actor_npc_ai_detach(npc);
     unsigned_state_graph_stop(&npc->state_graph);
     unsigned_actor_destroy(&npc->character->actor);
 }

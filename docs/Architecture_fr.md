@@ -394,6 +394,8 @@ Le niveau contient une configuration séparée pour :
 
 Les NPC peuvent être classés `ACTIVE`, `OFFSCREEN` ou `DORMANT`. `engine/level/level_ai.c` choisit leur activité selon la caméra, puis `engine/actor/npc_ai.c` applique la cadence TLSS correspondante.
 
+Les NPC de combat peuvent en plus utiliser la politique Beat'Em Up optionnelle de `npc_ai` : sélection d'une cible joueur, réservation d'un slot tactique autour de cette cible, approche directe, activation d'une ability d'attaque, recul, libération du slot et déplacement d'attente. Le niveau possède un petit `UNpcAiWorld` qui ne reconstruit les générations/réservations des cibles que lorsque la révision du pool joueur change. Les NPC passifs ou possédant un `UStateGraph` spécifique conservent le chemin précédent sans coût de politique supplémentaire. Le déplacement et les temporisations de cette politique utilisent le delta TLSS écoulé afin que le throttling off-screen réduise la fréquence de décision sans ralentir artificiellement le temps simulé.
+
 La collision utilise également TLSS lors de la résolution des hits/projectiles. Une hitbox nouvellement active peut forcer une résolution immédiate afin de ne pas perdre sa première frame active.
 
 ## 10. Collision : physique et sens gameplay
@@ -492,6 +494,10 @@ La frontière renderer/system est séparée par responsabilité : `engine/system
 ## 12. Backgrounds et sprites
 
 `engine/level/background/background.c` dérive désormais son parallax de la position X absolue de la caméra ; il ne suit plus directement un joueur ou un autre acteur gameplay. `engine/renderer/background_renderer.c` traite ensuite ces backgrounds comme des bandes de sprites matériels réutilisables. Le cache évite de réécrire l'ensemble de l'écran lors d'un simple scroll.
+
+La taille source et le placement écran d'un background sont volontairement séparés au runtime. `UBackgroundLayerDefinition.width_tiles` décrit la période répétée de la source et peut donc être plus étroite que le viewport ; le renderer répète cette source dans son ring fixe de 21 colonnes. `UBackgroundLayer.position` est initialisée depuis le placement authored par défaut et peut être modifiée avec `unsigned_level_background_set_layer_position()` sans reconstruire la définition source. Un niveau peut ainsi partitionner verticalement ses bandes de parallaxe et éviter les superpositions inutiles par scanline.
+
+La démo utilise trois ranges matériels compacts de 21 colonnes (sprites 1-21, 22-42 et 43-63). Les assets et leur placement optimisés garantissent qu'au maximum deux bandes de background sont actives sur une même scanline : le pic background passe de 63 à 42 colonnes, laissant 54 des 96 colonnes Neo Geo disponibles pour les acteurs.
 
 `engine/renderer/sprite_renderer.c` utilise l'état dirty du sprite pour ne pousser que les parties modifiées vers le backend : graphisme, position, scale/shrink, flips et layout. Il compose l'effet de la caméra avec l'effet local du sprite, applique les pivots et choisit entre la chaîne matérielle compacte et un rendu par colonne lorsque l'effet le demande.
 

@@ -283,7 +283,7 @@ Fichiers utiles :
 Le contenu concret va dans `src/levels/<nom_du_niveau>/`.
 
 1. déclarer un `ULevelDefinition` ;
-2. définir les backgrounds et spawns avec une durée de vie suffisante ;
+2. définir les backgrounds et spawns avec une durée de vie suffisante ; placer les layers de background avec `unsigned_level_background_set_layer_position()` quand un niveau doit utiliser un offset écran différent de celui de l'asset ;
 3. utiliser `load` pour le setup qui ne peut pas être exprimé par les données ;
 4. utiliser `enter` / `exit` pour le changement d'état autour du niveau actif ;
 5. utiliser `unload` pour annuler le travail de `load` ;

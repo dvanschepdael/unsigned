@@ -7,6 +7,7 @@
 #define UNSIGNED_ACTOR_NPC_H
 
 #include "actor/character.h"
+#include "actor/npc_ai.h"
 #include "core/state/state_graph.h"
 #include "core/tlss/tlss.h"
 
@@ -22,6 +23,8 @@ typedef enum UNpcActivity {
 typedef struct UNpc {
     UCharacter *character;
     UStateGraph state_graph;
+    /** Optional lightweight Beat'Em Up policy state; profile == NULL keeps custom/passive behavior. */
+    UNpcAiRuntime ai;
     UTLSSNode tlss_ai;
     UTLSSNode tlss_presentation;
     /** Sprite playback revision represented by presentation_animation_last_tick. */

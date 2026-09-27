@@ -44,6 +44,7 @@ void unsigned_level_init(ULevel *level, const ULevelRuntimeConfig *config) {
                 .collision = U_TLSS_SCALE_1,
             },
     };
+    unsigned_actor_npc_ai_world_init(&level->npc_ai, &config->actor_pools->players, &config->gameplay->abilities);
     unsigned_actor_container_init(&level->actors, config->actor_instances);
     unsigned_physics_collision_init(&level->collision.manager, config->collision_config, config->collision_layer_boxes);
     unsigned_camera_init(&level->camera, &config->camera);
@@ -64,6 +65,7 @@ void unsigned_level_load(ULevel *level, const ULevelDefinition *definition, void
 
     unsigned_tlss_init(&level->tlss);
     level->tlss.scales = level->tlss_config;
+    unsigned_actor_npc_ai_world_reset(&level->npc_ai);
     unsigned_level_background_init(&level->background);
     unsigned_level_camera_init(level, definition->camera);
 

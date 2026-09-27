@@ -65,10 +65,15 @@ void unsigned_level_background_set_layer(UBackground *background, u8 layer_index
     UBackgroundLayer *layer = &background->layers[layer_index];
     *layer = (UBackgroundLayer){
         .definition = definition,
+        .position = definition->screen_position,
     };
 
     /* A layer added after the camera moved must immediately match the current world origin. */
     background_layer_set_scroll(layer, background_parallax_fixed(background->camera_x, definition->parallax_fixed));
+}
+
+void unsigned_level_background_set_layer_position(UBackground *background, u8 layer_index, Vec2 position) {
+    background->layers[layer_index].position = position;
 }
 
 void unsigned_level_background_clear_layer(UBackground *background, u8 layer_index) {

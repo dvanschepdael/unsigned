@@ -25,8 +25,10 @@ static inline s32 unsigned_background_fixed_to_pixels(s32 value) {
 /**
  * Immutable presentation definition for one repeating parallax layer.
  *
- * @invariant `width_tiles > 0` and `1 <= height_tiles <= 32`.
- * @invariant `first_sprite` names a usable Neo Geo sprite column.
+ * @invariant `width_tiles > 0` and `1 <= height_tiles <= 32`. `width_tiles` is the repeating
+ * source width and may be smaller than the camera; the renderer repeats it across its hardware ring.
+ * @invariant `first_sprite` starts a contiguous range large enough for
+ * `UNSIGNED_BACKGROUND_RENDER_MAX_COLUMNS` hardware sprite columns.
  * @invariant `auto_animation` contains only bits from `U_SPRITE_AUTO_ANIMATION_MASK`.
  */
 typedef struct UBackgroundLayerDefinition {
@@ -36,6 +38,7 @@ typedef struct UBackgroundLayerDefinition {
     u8 width_tiles;
     u8 height_tiles;
     u8 parallax_fixed;
+    /** Default screen-space placement copied into runtime when the layer is installed. */
     Vec2 screen_position;
     u8 auto_animation;
 } UBackgroundLayerDefinition;
@@ -43,6 +46,8 @@ typedef struct UBackgroundLayerDefinition {
 typedef struct UBackgroundLayer {
     /** NULL means the layer is inactive; active layers always own an immutable definition. */
     const UBackgroundLayerDefinition *definition;
+    /** Per-level screen-space placement. It starts from definition->screen_position and may be moved independently. */
+    Vec2 position;
     s32 scroll_fixed;
     u16 scroll_pixels;
 } UBackgroundLayer;
@@ -65,6 +70,14 @@ void unsigned_level_background_init(UBackground *background);
  * @pre `definition` satisfies the `UBackgroundLayerDefinition` content invariants.
  */
 void unsigned_level_background_set_layer(UBackground *background, u8 layer_index, const UBackgroundLayerDefinition *definition);
+
+/**
+ * @brief Places an active layer at a screen-space offset relative to the camera viewport.
+ *
+ * Moving a layer only dirties its presentation transform; source tiles and parallax state are unchanged.
+ * @pre `layer_index < UNSIGNED_BACKGROUND_MAX_LAYERS` and the layer is active.
+ */
+void unsigned_level_background_set_layer_position(UBackground *background, u8 layer_index, Vec2 position);
 
 /**
  * @brief Deactivates one presentation layer without affecting the remaining parallax state.

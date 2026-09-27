@@ -54,6 +54,8 @@ typedef struct ULevelCollisionRuntime {
 struct ULevel {
     UTLSS tlss;
     UTLSSScaleConfig tlss_config;
+    /** Shared target/slot coordinator for NPCs using the built-in Beat'Em Up AI policy. */
+    UNpcAiWorld npc_ai;
     UActorContainer actors;
     ULevelActorSyncRuntime actor_sync;
     UActorPoolSet *actor_pools;

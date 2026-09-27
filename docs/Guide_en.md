@@ -283,7 +283,7 @@ Useful files:
 Concrete content belongs under `src/levels/<level_name>/`.
 
 1. declare a `ULevelDefinition`;
-2. define backgrounds and spawns with a sufficient lifetime;
+2. define backgrounds and spawns with a sufficient lifetime; place background layers with `unsigned_level_background_set_layer_position()` when a level needs a screen offset distinct from the asset default;
 3. use `load` for setup that cannot be expressed as data;
 4. use `enter` / `exit` for state changes around the active level;
 5. use `unload` to undo work performed by `load`;

@@ -10,6 +10,7 @@
 #define UNSIGNED_BACKGROUND_MAX_LAYERS 3
 #endif
 
+/** Physical sprite columns reserved per layer. 21 covers a 320 px viewport plus one scroll column. */
 #ifndef UNSIGNED_BACKGROUND_RENDER_MAX_COLUMNS
 #define UNSIGNED_BACKGROUND_RENDER_MAX_COLUMNS 21
 #endif
