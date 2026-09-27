@@ -1,0 +1,42 @@
+#include "audio/audio.h"
+
+#include "audio/audio_backend.h"
+#include "audio/audio_music_internal.h"
+#include "audio/audio_queue_internal.h"
+
+void unsigned_audio_init(UAudioManager *audio) {
+    *audio = (UAudioManager){ 0 };
+    audio->random_state = 1u;
+    audio->music.current_state = U_AUDIO_MUSIC_STATE_NONE;
+    audio->music.requested_state = U_AUDIO_MUSIC_STATE_NONE;
+}
+
+void unsigned_audio_set_seed(UAudioManager *audio, u16 seed) {
+    audio->random_state = seed;
+}
+
+bool unsigned_audio_play_sound(UAudioManager *audio, USoundCommand command) {
+    return unsigned_audio_queue_push(audio->pending_sound_effects, &audio->pending_sound_effect_head, &audio->pending_sound_effect_count, UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY, command);
+}
+
+void unsigned_audio_tick(UAudioManager *audio) {
+    /*
+     * The platform transport may apply back-pressure. Keep the already-resolved command in the
+     * manager until it is accepted so music transitions and SFX queue entries are never lost.
+     */
+    if (audio->pending_backend_command != U_AUDIO_COMMAND_NONE) {
+        if (unsigned_audio_backend_send(audio->pending_backend_command)) {
+            audio->pending_backend_command = U_AUDIO_COMMAND_NONE;
+        }
+        return;
+    }
+
+    ++audio->tick;
+    USoundCommand command = unsigned_audio_music_tick(audio);
+    if (command == U_AUDIO_COMMAND_NONE) {
+        command = unsigned_audio_queue_pop(audio->pending_sound_effects, &audio->pending_sound_effect_head, &audio->pending_sound_effect_count, UNSIGNED_AUDIO_SFX_QUEUE_CAPACITY);
+    }
+    if (command != U_AUDIO_COMMAND_NONE && !unsigned_audio_backend_send(command)) {
+        audio->pending_backend_command = command;
+    }
+}
