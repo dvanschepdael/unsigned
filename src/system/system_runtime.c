@@ -1,0 +1,227 @@
+#include "system/system_runtime.h"
+
+#include "system/audio_backend_internal.h"
+#include "system/bios_callbacks_internal.h"
+#include "system/bios_state_internal.h"
+#include "system/system_input.h"
+#include "system/session_internal.h"
+#include "system/video.h"
+
+#include <ngdevkit/bios-ram.h>
+#include <ngdevkit/ng-video.h>
+
+static bool neo_geo_attract_ended = true;
+
+/**
+ * Bootstrap one ngdevkit C entry before any potentially long project initialization.
+ *
+ * MVS can temporarily switch from the cartridge FIX/M1 ROMs to the board FIX/SM1 ROMs while
+ * entering forced-start TITLE (USER 3). nullsound's command 1 intentionally silences the YM2610
+ * and waits in Z80 RAM for that ROM handoff. Once ngdevkit has selected CRTFIX/M1 again, command 3
+ * is required to initialize the cartridge sound driver.
+ *
+ * A COIN_SOUND raised during USER 2 with GAME START COMPULSION is therefore deferred across the C
+ * runtime reset. USER 3 resets nullsound first, then arms the deferred coin event for the first
+ * post-VBlank transport slot, when the newly selected M1 driver has had time to initialize.
+ */
+static void neo_geo_init(USoundCommand coin_sound_command, UNeoGeoBiosRequest request) {
+    unsigned_system_audio_init();
+
+    if (request == U_NEO_GEO_BIOS_REQUEST_DEMO) {
+        /* A fresh attract entry invalidates any stale handoff left by an interrupted boot/session. */
+        unsigned_system_audio_discard_coin_sounds();
+        unsigned_system_audio_reset();
+    } else if (request == U_NEO_GEO_BIOS_REQUEST_TITLE) {
+        unsigned_system_audio_reset();
+        unsigned_system_audio_resume_coin_sounds(coin_sound_command);
+    }
+
+    unsigned_system_bios_init(coin_sound_command, request);
+    unsigned_system_session_reset();
+    unsigned_system_video_init();
+}
+
+static void neo_geo_enter_phase(const UNeoGeoRuntimeDefinition *definition, UNeoGeoPhase phase) {
+    if (definition->enter_phase != NULL) {
+        definition->enter_phase(definition->context, phase);
+    }
+}
+
+/**
+ * Execute one complete game frame.
+ *
+ * ngdevkit's VBlank handler runs SYSTEM_IO, which updates BIOS controller state and dispatches BIOS
+ * callbacks such as PLAYER_START. The frame therefore consumes the BIOS-maintained input snapshot;
+ * it never tries to synthesize a START event itself.
+ */
+static void neo_geo_frame(const UNeoGeoRuntimeDefinition *definition, UNeoGeoPhase phase) {
+    unsigned_system_input_poll(definition->input);
+
+    if (definition->tick != NULL) {
+        definition->tick(definition->context);
+    }
+
+    /*
+     * V4 split renderer: do all culling, allocation, relocation detection and effect
+     * sampling during active display. The callback contract is CPU/RAM-only so the
+     * following VBlank can be spent almost entirely on hardware writes.
+     */
+    if (definition->render_build != NULL) {
+        definition->render_build(definition->context);
+    }
+
+    /* Commit SCB/FIX/palette updates immediately after VBlank starts. */
+    ng_wait_vblank();
+
+    /* Keep the audio transport at its existing immediate post-VBlank boundary. */
+    unsigned_system_audio_tick();
+
+    if (definition->commit_render != NULL) {
+        definition->commit_render(definition->context);
+    }
+
+    if (definition->render_phase != NULL) {
+        definition->render_phase(definition->context, phase);
+    }
+}
+
+/**
+ * Run GAME while a player is PLAYING or waiting in CONTINUE.
+ * CONTINUE keeps the session alive so a later BIOS PLAYER_START can restore that slot to PLAYING.
+ * GAME_OVER begins only when every participating slot has reached a terminal player mode.
+ */
+static void neo_geo_run_game(const UNeoGeoRuntimeDefinition *definition) {
+    if (!unsigned_system_session_game_started()) {
+        return;
+    }
+
+    unsigned_system_session_begin();
+
+    if (definition->start_game != NULL) {
+        definition->start_game(definition->context);
+    }
+
+    neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_GAME);
+
+    while (!unsigned_system_session_has_ended() && unsigned_system_session_has_players()) {
+        neo_geo_frame(definition, U_NEO_GEO_PHASE_GAME);
+    }
+
+    if (unsigned_system_session_has_ended()) {
+        return;
+    }
+
+    neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_GAME_OVER);
+
+    while (!unsigned_system_session_has_ended()) {
+        neo_geo_frame(definition, U_NEO_GEO_PHASE_GAME_OVER);
+    }
+}
+
+/**
+ * Run USER 2 attract presentation.
+ *
+ * ATTRACT has two valid exits: PLAYER_START changes BIOS_USER_MODE to GAME, or the presentation calls
+ * unsigned_system_runtime_end_attract(). In the latter case this function returns so ngdevkit can execute
+ * SYSTEM_RETURN and let the BIOS decide what happens next (important for normal MVS slot rotation).
+ */
+static void neo_geo_run_demo(const UNeoGeoRuntimeDefinition *definition) {
+    bios_user_mode = U_NEO_GEO_MODE_DEMO;
+    neo_geo_attract_ended = false;
+
+    neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_ATTRACT);
+
+    while (!neo_geo_attract_ended && !unsigned_system_session_game_started()) {
+        neo_geo_frame(definition, U_NEO_GEO_PHASE_ATTRACT);
+    }
+
+    if (unsigned_system_session_game_started()) {
+        neo_geo_run_game(definition);
+    }
+}
+
+static void neo_geo_run_title(const UNeoGeoRuntimeDefinition *definition) {
+    if (unsigned_system_session_type() != U_NEO_GEO_SYSTEM_MVS) {
+        return;
+    }
+
+    /* Some MVS BIOS revisions otherwise request USER 3 again after game over with credits present. */
+    bios_title_mode = 1u;
+    bios_user_mode = U_NEO_GEO_MODE_DEMO;
+
+    neo_geo_enter_phase(definition, U_NEO_GEO_PHASE_TITLE);
+
+    while (!unsigned_system_session_game_started()) {
+        neo_geo_frame(definition, U_NEO_GEO_PHASE_TITLE);
+    }
+
+    neo_geo_run_game(definition);
+}
+
+static void neo_geo_run_initialized(const UNeoGeoRuntimeDefinition *definition, void (*run)(const UNeoGeoRuntimeDefinition *)) {
+    unsigned_system_bios_begin(definition);
+
+    if (definition->initialize != NULL) {
+        definition->initialize(definition->context);
+    }
+
+    unsigned_system_bios_enable_start();
+    run(definition);
+
+    unsigned_system_bios_end();
+
+    if (definition->shutdown != NULL) {
+        definition->shutdown(definition->context);
+    }
+}
+
+/**
+ * Main ngdevkit BIOS entry point.
+ *
+ * Dispatches USER 1/2/3 according to BIOS_USER_REQUEST.
+ */
+int unsigned_system_runtime_run(const UNeoGeoRuntimeDefinition *definition, USoundCommand coin_sound_command) {
+    const UNeoGeoBiosRequest request = bios_user_request <= U_NEO_GEO_BIOS_REQUEST_TITLE ? (UNeoGeoBiosRequest)bios_user_request : U_NEO_GEO_BIOS_REQUEST_INVALID;
+
+    neo_geo_init(coin_sound_command, request);
+
+    switch (request) {
+    case U_NEO_GEO_BIOS_REQUEST_EYE_CATCHER:
+        bios_user_mode = U_NEO_GEO_MODE_BOOT;
+
+        if (definition->eye_catcher != NULL) {
+            definition->eye_catcher(definition->context);
+        }
+        break;
+
+    case U_NEO_GEO_BIOS_REQUEST_DEMO:
+        neo_geo_run_initialized(definition, neo_geo_run_demo);
+        break;
+
+    case U_NEO_GEO_BIOS_REQUEST_TITLE:
+        neo_geo_run_initialized(definition, neo_geo_run_title);
+        break;
+
+    case U_NEO_GEO_BIOS_REQUEST_INIT:
+    case U_NEO_GEO_BIOS_REQUEST_INVALID:
+        break;
+    }
+
+    return 0;
+}
+
+/**
+ * ngdevkit MVS USER 3 entry point.
+ *
+ * USER 3 is a dedicated TITLE entry: initialize the cartridge-side runtime after the BIOS has
+ * remapped CRTFIX/M1, then run the same initialized TITLE lifecycle used by the shared runner.
+ */
+int unsigned_system_runtime_run_mvs(const UNeoGeoRuntimeDefinition *definition, USoundCommand coin_sound_command) {
+    neo_geo_init(coin_sound_command, U_NEO_GEO_BIOS_REQUEST_TITLE);
+    neo_geo_run_initialized(definition, neo_geo_run_title);
+    return 0;
+}
+
+void unsigned_system_runtime_end_attract(void) {
+    neo_geo_attract_ended = true;
+}
